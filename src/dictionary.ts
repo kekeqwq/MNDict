@@ -8,6 +8,7 @@ export interface Dictionary extends DictionaryInfo {
   ready: boolean;
   order: number;
   count: number;
+  archiveId?: string;
 }
 
 interface Term extends Entry { dictionaryId: string; key: string }
@@ -68,7 +69,7 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
   return {
     list, deleteDictionary: remove,
     async importZip(blob: Blob, onLog: (message: string) => void = () => {},
-      onProgress: (done: number, total: number) => void = () => {}) {
+      onProgress: (done: number, total: number) => void = () => {}, archiveId?: string) {
       return readDictionary(blob, async (info, banks, total) => {
         const database = await db();
         const dictionaries = await list();
@@ -77,7 +78,8 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
         }
         const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
         const dict: Dictionary = { ...info, id, enabled: true, ready: false,
-          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0 };
+          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0,
+          ...(archiveId ? { archiveId } : {}) };
         await database.put("dictionaries", dict);
         let done = 0;
         try {

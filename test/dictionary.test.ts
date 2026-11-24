@@ -35,8 +35,9 @@ async function main() {
     "index.json": JSON.stringify({ title: "Test Dict", revision: "r1", format: 3, sourceLanguage: "en" }),
     "term_bank_1.json": JSON.stringify(bank),
     "term_bank_2.json": JSON.stringify(secondBank),
-  }), (message) => logs.push(message), (done, total) => progress.push([done, total]));
+  }), (message) => logs.push(message), (done, total) => progress.push([done, total]), "arc-test");
   ok(dict.ready && dict.count === 3, "导入词条数");
+  ok(dict.archiveId === "arc-test", "备份 id 透传");
   ok(progress.length === 3 && progress.at(-1)?.[0] === 2, "导入进度回调");
   ok(logs.some((line) => line.includes("导入完成")) && logs.some((line) => line.includes("解析")), "导入日志");
   ok((await library.list()).length === 1, "词典列表");

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, type Dictionary, type Match } from "./dictionary";
 
 const library = createDictionaryStore();
@@ -71,11 +72,29 @@ export function App() {
         if (active && response?.ok && typeof response.autoLookup === "boolean") setAutoLookup(response.autoLookup);
       }).catch(() => {});
       host.call<unknown>("getOpenState").then((state) => { if (active) applyOpen(state); }).catch(() => {});
+      void update(async () => {
+        if (!host || !__MN_NATIVE_BRIDGE__) return;
+        const archives = await listArchives(host);
+        const known = new Set((await library.list()).map((dict) => dict.archiveId).filter(Boolean));
+        for (const archive of archives) {
+          if (known.has(archive.id)) continue;
+          appendLog(`发现备份词典 ${archive.id}（${(archive.size / 1048576).toFixed(1)} MiB），重建索引…`);
+          try {
+            const blob = await loadArchive(host, archive, appendLog);
+            const item = await library.importZip(blob, appendLog,
+              (done, total) => setProgress({ done, total }), archive.id);
+            appendLog(`重建完成：${item.title}（${item.count.toLocaleString()} 条）`);
+          } catch (error) {
+            appendLog(`重建失败：${errorText(error)}`);
+          }
+        }
+      });
     }
     return () => {
       active = false;
       removeEventListener(settingsEvent, onOpen);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时执行一次
   }, []);
 
   useEffect(() => {
@@ -111,7 +130,7 @@ export function App() {
   async function changeAutoLookup(enabled: boolean) {
     if (!host) return;
     await update(async () => {
-      const response = await host.call<SettingsResponse>("setAutoLookup", enabled ? "on" : "off");
+      const response = await host.call<SettingsResponse>(enabled ? "enableAutoLookup" : "disableAutoLookup");
       if (!response?.ok || response.autoLookup !== enabled) {
         throw new Error(`无法保存划词设置：${JSON.stringify(response)}`);
       }
@@ -146,8 +165,18 @@ export function App() {
             event.currentTarget.value = "";
             if (file) void update(async () => {
               setLog([]);
-              const item = await library.importZip(file, appendLog, (done, total) => setProgress({ done, total }));
-              setMessage(`已导入 ${item.title}（${item.count.toLocaleString()} 条）`);
+              let archiveId: string | undefined;
+              if (host && __MN_NATIVE_BRIDGE__) {
+                appendLog("备份词典到 MarginNote 文稿目录（可自动恢复）…");
+                archiveId = await saveArchive(host, file, appendLog);
+              }
+              try {
+                const item = await library.importZip(file, appendLog, (done, total) => setProgress({ done, total }), archiveId);
+                setMessage(`已导入 ${item.title}（${item.count.toLocaleString()} 条）`);
+              } catch (error) {
+                if (archiveId && host) await dropArchive(host, archiveId).catch(() => {});
+                throw error;
+              }
             });
           }} /></label>
       </div>
