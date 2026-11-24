@@ -49,6 +49,27 @@ function mndictEnsureDir() {
     mndictArchiveDir(), true, null);
 }
 
+// 诊断日志落文件（mndict-dictionaries/debug.log），不污染界面
+function mndictLog(line) {
+  try {
+    var path = mndictArchiveDir() + "/debug.log";
+    var fm = NSFileManager.defaultManager();
+    mndictEnsureDir();
+    var data = NSData.dataWithStringEncoding(new Date().toISOString() + " " + line + "\n", 4);
+    if (!fm.fileExistsAtPath(path)) {
+      data.writeToFileAtomically(path, true);
+      return;
+    }
+    var handle = NSFileHandle.fileHandleForWritingAtPath(path);
+    if (!handle) return;
+    handle.seekToEndOfFile();
+    handle.writeData(data);
+    handle.closeFile();
+  } catch (error) {
+    // 日志失败不影响功能
+  }
+}
+
 function mndictTrash(id, path) {
   var fm = NSFileManager.defaultManager();
   var trash = mndictArchiveDir() + "/.trash";

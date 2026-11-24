@@ -13,12 +13,14 @@ function mndictWatchOutside(ctx) {
   var controller = Application.sharedInstance().studyController(ctx.window);
   var doc = controller && controller.readerController && controller.readerController.currentDocumentController;
   var view = doc && doc.view;
+  mndictLog("watchOutside controller=" + Boolean(controller) + " doc=" + Boolean(doc) + " view=" + Boolean(view));
   if (!view) return;
   var tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, "onOutsideTap:");
   tap.cancelsTouchesInView = false;
   view.addGestureRecognizer(tap);
   ctx.outsideTap = tap;
   ctx.outsideView = view;
+  mndictLog("watchOutside recognizer=" + Boolean(tap));
 }
 
 function mndictUnwatchOutside(ctx) {
@@ -28,6 +30,7 @@ function mndictUnwatchOutside(ctx) {
 }
 
 function mndictClose(ctx) {
+  mndictLog("close");
   var panel = ctx.panel;
   ctx.panel = null;
   ctx.settingsVisible = false;
@@ -44,6 +47,7 @@ function mndictShow(ctx, mode, text) {
   }
   if (ctx.panel && ctx.settingsVisible !== (mode === "workspace")) mndictClose(ctx);
   ctx.openState = { mode: mode, text: text };
+  mndictLog("show mode=" + mode);
   if (!ctx.panel) {
     var panel = AddonWebPanel.panel();
     if (!panel) {
@@ -109,7 +113,9 @@ JSB.newAddon = function () {
       }
     },
     onOutsideTap: function () {
-      if (self.panel && !self.settingsVisible) mndictClose(self);
+      var closing = Boolean(self.panel && !self.settingsVisible);
+      mndictLog("outsideTap closing=" + closing);
+      if (closing) mndictClose(self);
     },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;

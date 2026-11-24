@@ -37,6 +37,7 @@ const NATIVE_GLOBALS = [
   "UITapGestureRecognizer",
   "mndictAutoLookup",
   "mndictPanelMessage",
+  "mndictLog",
   "console",
 ];
 
