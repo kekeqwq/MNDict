@@ -241,11 +241,6 @@ JSB.newAddon = function () {
     notebookWillClose: function () {
       mndictClose(self);
     },
-    controllerWillLayoutSubviews: function (controller) {
-      if (self.panel && controller === Application.sharedInstance().studyController(self.window)) {
-        self.panel.showFloatingIn(controller);
-      }
-    },
     onOutsideTap: function () {
       if (self.panel && !self.settingsVisible) mndictClose(self);
     },
