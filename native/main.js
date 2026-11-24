@@ -16,12 +16,18 @@ function mndictWatchOutside(ctx) {
   var view = doc && doc.view;
   mndictLog("watchOutside controller=" + Boolean(controller) + " doc=" + Boolean(doc) + " view=" + Boolean(view));
   if (!view) return;
-  var tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, "onOutsideTap:");
-  tap.cancelsTouchesInView = false;
-  view.addGestureRecognizer(tap);
-  ctx.outsideTap = tap;
-  ctx.outsideView = view;
-  mndictLog("watchOutside recognizer=" + Boolean(tap));
+  try {
+    var tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, "onOutsideTap:");
+    mndictLog("watchOutside init=" + Boolean(tap));
+    tap.cancelsTouchesInView = false;
+    mndictLog("watchOutside cancels=false ok");
+    view.addGestureRecognizer(tap);
+    ctx.outsideTap = tap;
+    ctx.outsideView = view;
+    mndictLog("watchOutside recognizer added");
+  } catch (error) {
+    mndictLog("watchOutside error=" + error);
+  }
 }
 
 function mndictUnwatchOutside(ctx) {

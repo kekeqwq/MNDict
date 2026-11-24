@@ -140,6 +140,26 @@ export function App() {
   }, [log]);
 
   useEffect(() => {
+    if (mode !== "mini" || !host) return;
+    // 兑底：面板失焦/隐藏时关闭（部分环境不发 blur，原生手势为主）
+    let last = Date.now(); // 面板刚打开的 800ms 免疫初始失焦
+    function close() {
+      const now = Date.now();
+      if (now - last < 800) return;
+      last = now;
+      host?.close();
+    }
+    function onBlur() { close(); }
+    function onVisibility() { close(); }
+    addEventListener("blur", onBlur);
+    addEventListener("visibilitychange", onVisibility);
+    return () => {
+      removeEventListener("blur", onBlur);
+      removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [mode]);
+
+  useEffect(() => {
     if (!host) return;
     host.size(mode === "workspace" ? 480 : 420, mode === "workspace" ? 640 : 420);
   }, [mode]);
