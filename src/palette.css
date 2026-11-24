@@ -27,12 +27,6 @@
   --ctp-base: #eff1f5;
   --ctp-mantle: #e6e9ef;
   --ctp-crust: #dce0e8;
-  --ctp-glass: color-mix(in srgb, var(--ctp-base) 88%, transparent);
-  --ctp-glass-raised: color-mix(in srgb, var(--ctp-mantle) 82%, transparent);
-  --ctp-glass-soft: color-mix(in srgb, var(--ctp-surface0) 45%, transparent);
-  --ctp-glass-border: color-mix(in srgb, var(--ctp-surface1) 62%, transparent);
-  --ctp-glass-edge: color-mix(in srgb, #ffffff 55%, transparent);
-  --ctp-glass-shadow: 0 18px 48px color-mix(in srgb, var(--ctp-crust) 42%, transparent);
 }
 
 :root:has(main[data-palette="macchiato"]) {
@@ -63,10 +57,4 @@
   --ctp-base: #24273a;
   --ctp-mantle: #1e2030;
   --ctp-crust: #181926;
-  --ctp-glass: color-mix(in srgb, var(--ctp-base) 88%, transparent);
-  --ctp-glass-raised: color-mix(in srgb, var(--ctp-mantle) 82%, transparent);
-  --ctp-glass-soft: color-mix(in srgb, var(--ctp-surface0) 45%, transparent);
-  --ctp-glass-border: color-mix(in srgb, var(--ctp-surface1) 62%, transparent);
-  --ctp-glass-edge: color-mix(in srgb, #ffffff 14%, transparent);
-  --ctp-glass-shadow: 0 18px 48px color-mix(in srgb, var(--ctp-crust) 55%, transparent);
 }
