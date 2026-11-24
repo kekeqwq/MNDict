@@ -8,11 +8,15 @@ export interface Dictionary extends DictionaryInfo {
   ready: boolean;
   order: number;
   count: number;
+  parser: number;
   archiveId?: string;
 }
 
 interface Term extends Entry { dictionaryId: string; key: string }
 export interface Match extends Entry { dictionary: string }
+
+// 解析器版本：旧索引在打开面板时从备份自动重建
+export const PARSER_VERSION = 2;
 
 interface Data extends DBSchema {
   dictionaries: { key: string; value: Dictionary };
@@ -78,7 +82,7 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
         }
         const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
         const dict: Dictionary = { ...info, id, enabled: true, ready: false,
-          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0,
+          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0, parser: PARSER_VERSION,
           ...(archiveId ? { archiveId } : {}) };
         await database.put("dictionaries", dict);
         let done = 0;

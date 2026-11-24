@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
-import { createDictionaryStore, searchKeys } from "../src/dictionary";
+import { createDictionaryStore, PARSER_VERSION, searchKeys } from "../src/dictionary";
 import { definitionText, scopeDictionaryCss } from "../src/yomitan";
 
 function ok(condition: unknown, message: string): asserts condition {
@@ -53,7 +53,9 @@ async function main() {
   ok((await library.search("run"))[0]?.definitions[0] === "跑步", "结构化释义保留原始结构");
   ok(typeof (await library.search("run"))[0]?.definitions[1] === "object", "结构化内容不摊平");
   ok((await library.search("redirectme"))[0]?.definitions[0] === "目标释义", "跳转词条解析");
-  ok(scopeDictionaryCss(".a{color:red}@media print{.b{color:blue}}").startsWith(".glossary .a"), "词典 CSS 作用域化");
+  const scoped = scopeDictionaryCss(":root{--x:red}.a{color:red}@media print{.b{color:blue}}");
+  ok(scoped.includes(".glossary{--x:red}") && scoped.includes(".glossary .a"), "词典 CSS 作用域化");
+  ok(dict.parser === PARSER_VERSION, "解析器版本标记");
 
   await library.setEnabled(dict.id, false);
   ok((await library.search("run")).length === 0, "停用后查不到");

@@ -62,8 +62,9 @@ export function scopeDictionaryCss(css: string, scope = ".glossary"): string {
     const body = (match[2] ?? "").trim();
     if (!selector || !body || selector.startsWith("@")) continue;
     const scoped = selector.split(",").map((part) => part.trim())
-      .filter((part) => part && !/^(html|body|head|\*)$/i.test(part))
-      .map((part) => `${scope} ${part}`).join(", ");
+      .filter(Boolean)
+      .map((part) => /^(html|body|head|:root|\*)$/i.test(part) ? scope : `${scope} ${part}`)
+      .join(", ");
     if (scoped) rules.push(`${scoped}{${body}}`);
   }
   return rules.join("\n");

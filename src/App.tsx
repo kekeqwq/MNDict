@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
-import { createDictionaryStore, type Dictionary, type Match } from "./dictionary";
+import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } from "./dictionary";
 import { Glossary } from "./glossary";
 import { scopeDictionaryCss } from "./yomitan";
 
@@ -26,7 +26,7 @@ function Results({ state, css }: { state: QueryResult | null; css: string }) {
   if (!state) return null;
   return <section aria-label="释义" aria-live="polite" className="results">
     {css ? <style>{css}</style> : null}
-    <h2>{state.query}</h2>
+    <h2 hidden={state.matches[0]?.term.toLowerCase() === state.query.toLowerCase() && !state.error}>{state.query}</h2>
     {state.error ? <p role="alert">{state.error}</p> : !state.matches.length ? <p>启用的词典里没有找到这个词。</p> : null}
     {state.matches.map((match, index) => <article key={index}>
       <header><strong>{match.term}</strong>
@@ -96,6 +96,11 @@ export function App() {
       host.call<unknown>("getOpenState").then((state) => { if (active) applyOpen(state); }).catch(() => {});
       void update(async () => {
         if (!host || !__MN_NATIVE_BRIDGE__) return;
+        for (const dict of await library.list()) {
+          if (dict.parser === PARSER_VERSION || !dict.archiveId) continue;
+          appendLog(`《${dict.title}》索引格式过旧，从备份重建…`);
+          await library.deleteDictionary(dict.id);
+        }
         const archives = await listArchives(host);
         const known = new Set((await library.list()).map((dict) => dict.archiveId).filter(Boolean));
         for (const archive of archives) {
