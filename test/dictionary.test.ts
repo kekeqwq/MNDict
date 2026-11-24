@@ -52,7 +52,11 @@ function mockNative() {
       if (op === "stageChunk") {
         const file = parts[2] as string;
         const expected = Number(parts[3]);
-        const binary = atob(text.slice(`db:stageChunk:${file}:${expected}:`.length));
+        const hexPayload = text.slice(`db:stageChunk:${file}:${expected}:`.length);
+        let binary = "";
+        for (let i = 0; i + 1 < hexPayload.length; i += 2) {
+          binary += String.fromCharCode(parseInt(hexPayload.substring(i, i + 2), 16) & 255);
+        }
         if (binary.length !== expected) return { ok: false, wrote: 0 };
         staging.set(file, (staging.get(file) ?? "") + binary);
         return { ok: true, wrote: expected };

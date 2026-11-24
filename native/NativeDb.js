@@ -20,6 +20,14 @@ function ndB64Decode(text) {
   return out.join("");
 }
 
+function ndHexDecode(text) {
+  var out = [];
+  for (var i = 0; i + 1 < text.length; i += 2) {
+    out.push(String.fromCharCode(parseInt(text.substring(i, i + 2), 16) & 255));
+  }
+  return out.join("");
+}
+
 function ndUtf8Decode(binary) {
   var out = [];
   var i = 0;
@@ -140,7 +148,7 @@ function ndStagePut(name) {
   var expected = cut2 < 0 ? 0 : parseInt(rest.substring(cut1 + 1, cut2), 10) || 0;
   var payload = cut2 < 0 ? "" : rest.substring(cut2 + 1);
   if (!/^[A-Za-z0-9_.-]{1,80}$/.test(file)) return { ok: false, wrote: 0, detail: "文件名非法 " + file };
-  var binary = ndB64Decode(payload);
+  var binary = ndHexDecode(payload);
   if (binary.length !== expected) {
     return {
       ok: false, wrote: 0, decoded: binary.length,

@@ -1,4 +1,4 @@
-import { utf8ToBase64 } from "./codec";
+import { bytesToHex, utf8ToBase64 } from "./codec";
 import { readDictionary, redirectTarget, type DictionaryInfo, type Entry, type GlossaryItem } from "./yomitan";
 import lemmatizer from "wink-lemmatizer";
 
@@ -90,25 +90,32 @@ export function createDictionaryStore(host?: Mn) {
     return result.rows ?? [];
   }
 
-  // 分块写入暂存文件（与备份同一套强校验传输）
+  // 分块写入暂存文件：十六进制载荷 + 失败块二分降级，逐块验长度
+  async function putPiece(file: string, bytes: Uint8Array): Promise<void> {
+    const marker = `db:stageChunk:${file}:${bytes.length}:`;
+    const payload = bytesToHex(bytes);
+    let detail = "无响应";
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const result = await call<{ ok: boolean; wrote?: number; detail?: string }>(`${marker}${payload}`);
+      if (result?.ok && result.wrote === bytes.length) return;
+      detail = `第 ${attempt} 次 ${JSON.stringify(result)}`;
+      if (result?.wrote) break;
+    }
+    if (bytes.length > 1024) {
+      const half = Math.floor(bytes.length / 2);
+      await putPiece(file, bytes.subarray(0, half));
+      await putPiece(file, bytes.subarray(half));
+      return;
+    }
+    throw new Error(`词条数据写入失败：${detail}`);
+  }
+
   async function stageText(file: string, text: string): Promise<void> {
     await call(`db:stageBegin:${file}`);
     const bytes = new TextEncoder().encode(text);
-    const chunkSize = 24 * 1024;
+    const chunkSize = 16 * 1024;
     for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      const part = bytes.subarray(offset, offset + chunkSize);
-      let binary = "";
-      for (let i = 0; i < part.length; i += 1) binary += String.fromCharCode(part[i] as number);
-      const marker = `db:stageChunk:${file}:${part.length}:`;
-      let detail = "无响应";
-      let done = false;
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        const result = await call<{ ok: boolean; wrote?: number; detail?: string }>(`${marker}${btoa(binary)}`);
-        if (result?.ok && result.wrote === part.length) { done = true; break; }
-        detail = `第 ${attempt} 次 ${JSON.stringify(result)}`;
-        if (result?.wrote) break;
-      }
-      if (!done) throw new Error(`词条数据写入失败：${detail}`);
+      await putPiece(file, bytes.subarray(offset, offset + chunkSize));
     }
   }
 
