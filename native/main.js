@@ -36,7 +36,7 @@ function mndictWatchOutside(ctx) {
       }
     }
     if (!tap) return;
-    tap.cancelsTouchesInView = false;
+    tap.cancelsTouchesInView = true; // 拦截这下点击：只关查词卡，保留选区与工具条；识别器卸载后下一次点击交还 MN
     view.addGestureRecognizer(tap);
     ctx.outsideTap = tap;
     ctx.outsideView = view;
