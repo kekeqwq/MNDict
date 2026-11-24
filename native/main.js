@@ -102,6 +102,22 @@ function mndictShow(ctx, mode, text) {
   if (mode === "mini") mndictWatchOutside(ctx);
   else mndictUnwatchOutside(ctx);
   ctx.panel.showFloatingIn(controller);
+  // 查词卡固定在屏幕下部左侧：黑色工具条所在的中带之下，内容随 fit 向下生长
+  if (mode === "mini") {
+    try {
+      var bounds = controller.view.bounds;
+      var panelView = ctx.panel.view;
+      if (panelView && bounds) {
+        var y = Math.round(bounds.height * 0.44);
+        var h = Math.max(240, Math.round(bounds.height * 0.5) - 24);
+        panelView.frame = { x: 16, y: y, width: 420, height: h };
+        ctx.panel.maxContentHeight = h;
+        mndictLog("show mini 定位 y=" + y + " h=" + h);
+      }
+    } catch (frameError) {
+      mndictLog("show frame error=" + frameError);
+    }
+  }
   ctx.panel.post("mndict-open", ctx.openState);
 }
 

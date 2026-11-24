@@ -23,9 +23,7 @@ input { accent-color: #6d55bd; }
 .dict-name small { display: block; }
 .confirm { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .search input { background: Canvas; color: CanvasText; min-width: 0; flex: 1; }
-.popup { display: grid; gap: 6px; position: relative; }
-.popup .collapse { position: absolute; top: calc(var(--mn-drag-h, 36px) - 4px); right: 8px; z-index: 2; padding: 2px 9px; font-size: 12px; }
-.popup .results > h2, .popup .results > article:first-child > header { padding-right: 52px; }
+.popup { display: grid; gap: 6px; }
 :root[data-mode="mini"] body { padding-top: 4px; }
 .drag-title { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: GrayText; line-height: 28px; user-select: none; }
 .results .meta { display: flex; align-items: center; gap: 6px; }
