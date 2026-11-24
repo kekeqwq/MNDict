@@ -246,6 +246,7 @@ export function App() {
 
   if (mode === "mini") return <main className="popup">
     <div className="drag-title" aria-hidden="true">MNDict</div>
+    <button type="button" className="collapse" onClick={() => host?.size(1, 1)}>收起</button>
     {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 
