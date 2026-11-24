@@ -14,8 +14,9 @@ export interface Entry {
   definitions: string[];
 }
 
-const maxBankBytes = 32 * 1024 * 1024;
-const maxArchiveBytes = 512 * 1024 * 1024;
+// 上限仅防 zip 炸弹，真实词典远在限内
+const maxArchiveBytes = 4 * 1024 * 1024 * 1024;
+const maxBankBytes = 2 * 1024 * 1024 * 1024;
 const bankPattern = /^term_bank_([1-9]\d*)\.json$/;
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -52,23 +53,35 @@ function parseEntry(row: unknown): Entry {
   };
 }
 
-async function readJson(entry: FileEntry, limit: number): Promise<unknown> {
-  if (entry.encrypted || entry.uncompressedSize > limit) throw new Error(`不支持加密或过大的文件：${entry.filename}`);
+async function readJson(entry: FileEntry, limit: number, onLog: (message: string) => void): Promise<unknown> {
+  if (entry.encrypted) throw new Error(`不支持加密的词典文件：${entry.filename}`);
   let length = 0;
+  let sinceLog = 0;
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const chunks: string[] = [];
   await entry.getData(new WritableStream<Uint8Array>({
-    write(chunk) {
+    async write(chunk) {
       length += chunk.byteLength;
-      if (length > limit) throw new Error(`解压后的文件过大：${entry.filename}`);
+      if (length > limit) throw new Error(`解压后文件过大：${entry.filename}`);
+      sinceLog += chunk.byteLength;
+      if (sinceLog >= 8 * 1024 * 1024) {
+        sinceLog = 0;
+        onLog(`解压 ${entry.filename}：${(length / 1048576).toFixed(0)} MiB`);
+        // 让出事件循环，界面才能刷新日志
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
       chunks.push(decoder.decode(chunk, { stream: true }));
     },
   }), { checkSignature: true, useWebWorkers: false });
   return JSON.parse(chunks.join("") + decoder.decode()) as unknown;
 }
 
-export async function readDictionary<T>(file: Blob, consume: (info: DictionaryInfo, banks: AsyncIterable<Entry[]>, total: number) => Promise<T>): Promise<T> {
-  if (file.size > maxArchiveBytes) throw new Error("词典 ZIP 超过 512 MiB");
+export async function readDictionary<T>(
+  file: Blob,
+  consume: (info: DictionaryInfo, banks: AsyncIterable<Entry[]>, total: number) => Promise<T>,
+  onLog: (message: string) => void = () => {},
+): Promise<T> {
+  if (file.size > maxArchiveBytes) throw new Error("词典 ZIP 超过 4 GiB");
   const archive = new ZipReader(new BlobReader(file));
   try {
     let index: FileEntry | undefined;
@@ -81,19 +94,21 @@ export async function readDictionary<T>(file: Blob, consume: (info: DictionaryIn
       if (seen.has(member.filename)) throw new Error(`词典包含重复文件：${member.filename}`);
       seen.add(member.filename);
       size += member.uncompressedSize;
-      if (size > 1024 * 1024 * 1024) throw new Error("词典索引数据超过 1 GiB");
+      if (size > 4 * 1024 * 1024 * 1024) throw new Error("词典解压数据超过 4 GiB");
       if (member.filename === "index.json") index = member;
       else banks.push(member);
     }
     if (!index || !banks.length) throw new Error("ZIP 根目录须有 index.json 和 term_bank_*.json");
-    const info = record(await readJson(index, 1024 * 1024));
+    const info = record(await readJson(index, 1024 * 1024, onLog));
     if (!info || (info.format ?? info.version) !== 3 || typeof info.title !== "string" ||
       !info.title.trim() || typeof info.revision !== "string") throw new Error("仅支持 Yomitan v3 词条词典");
     banks.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
+    onLog(`识别到《${String(info.title).trim()}》rev ${String(info.revision)}，${banks.length} 个词条文件`);
     async function* entries() {
       for (const bank of banks) {
-        const value = await readJson(bank, maxBankBytes);
+        const value = await readJson(bank, maxBankBytes, onLog);
         if (!Array.isArray(value)) throw new Error(`词条文件格式错误：${bank.filename}`);
+        onLog(`解析 ${bank.filename}：${value.length.toLocaleString()} 条`);
         yield value.map(parseEntry);
       }
     }

@@ -48,10 +48,9 @@ function mndictShow(ctx, mode, text) {
       return;
     }
     ctx.panel = panel;
-    app.showHUD("MNDict：面板已创建", ctx.window, 1);
   }
   ctx.settingsVisible = mode === "workspace";
-  ctx.panel.showFloatingInMode(controller, mode);
+  ctx.panel.showFloatingIn(controller);
   ctx.panel.post("mndict-open", ctx.openState);
 }
 
@@ -81,6 +80,11 @@ JSB.newAddon = function () {
     notebookWillClose: function () {
       mndictClose(self);
     },
+    controllerWillLayoutSubviews: function (controller) {
+      if (self.panel && controller === Application.sharedInstance().studyController(self.window)) {
+        self.panel.showFloatingIn(controller);
+      }
+    },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;
       if (!Application.sharedInstance().checkNotifySenderInWindow(sender, self.window)) return;
@@ -93,12 +97,13 @@ JSB.newAddon = function () {
     },
     queryAddonCommandStatus: function () {
       return {
-        image: "icon.png", object: self, selector: "openSettings:", checked: self.settingsVisible,
+        image: "icon.png", object: self, selector: "openSettings:",
+        checked: Boolean(self.panel && self.panel.floatingVisible),
       };
     },
     openSettings: function () {
       try {
-        if (self.settingsVisible) mndictClose(self);
+        if (self.panel && self.panel.floatingVisible && self.settingsVisible) mndictClose(self);
         else mndictShow(self, "workspace", "");
         mndictRefreshCommands(self);
       } catch (error) {

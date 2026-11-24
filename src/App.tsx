@@ -29,6 +29,7 @@ export function App() {
   const [result, setResult] = useState<{ query: string; matches: Match[]; error?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [log, setLog] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [storageError, setStorageError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -76,7 +77,16 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => { host?.fit(); }, [mode, dictionaries, progress, result, message, pendingDelete, storageError]);
+  useEffect(() => {
+    if (!host) return;
+    host.size(mode === "workspace" ? 420 : 355, mode === "workspace" ? 520 : 240);
+  }, [mode]);
+
+  useEffect(() => { host?.fit(); }, [mode, dictionaries, progress, result, message, pendingDelete, storageError, log]);
+
+  function appendLog(line: string) {
+    setLog((lines) => [...lines.slice(-199), line]);
+  }
 
   async function update(action: () => Promise<void>) {
     setBusy(true);
@@ -128,12 +138,14 @@ export function App() {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";
             if (file) void update(async () => {
-              const item = await library.importZip(file, (done, total) => setProgress({ done, total }));
+              setLog([]);
+              const item = await library.importZip(file, appendLog, (done, total) => setProgress({ done, total }));
               setMessage(`已导入 ${item.title}（${item.count.toLocaleString()} 条）`);
             });
           }} /></label>
       </div>
       {progress ? <p role="status">正在索引 {progress.done} / {progress.total} <progress value={progress.done} max={progress.total} /></p> : null}
+      {log.length ? <div className="log" role="log">{log.map((line, index) => <div key={index}>{line}</div>)}</div> : null}
       {storageError ? <p role="alert">{storageError}</p> : !dictionaries.length && !progress ? <p>还没有导入词典。</p> : null}
       <ul className="library">{dictionaries.map((dict, index) => <li key={dict.id}>
         <label className="dict-name"><input type="checkbox" checked={dict.enabled} disabled={busy}

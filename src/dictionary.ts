@@ -67,7 +67,8 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
 
   return {
     list, deleteDictionary: remove,
-    async importZip(blob: Blob, progress: (done: number, total: number) => void = () => {}) {
+    async importZip(blob: Blob, onLog: (message: string) => void = () => {},
+      onProgress: (done: number, total: number) => void = () => {}) {
       return readDictionary(blob, async (info, banks, total) => {
         const database = await db();
         const dictionaries = await list();
@@ -80,7 +81,7 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
         await database.put("dictionaries", dict);
         let done = 0;
         try {
-          progress(done, total);
+          onProgress(done, total);
           for await (const bank of banks) {
             for (let i = 0; i < bank.length; i += 500) {
               const tx = database.transaction("terms", "readwrite");
@@ -89,17 +90,20 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
               })), tx.done]);
             }
             dict.count += bank.length;
-            progress(++done, total);
+            onLog(`已写入 ${dict.count.toLocaleString()} 条`);
+            onProgress(++done, total);
           }
           if (!dict.count) throw new Error("词典没有词条");
           dict.ready = true;
           await database.put("dictionaries", dict);
+          onLog(`导入完成：${dict.count.toLocaleString()} 条`);
           return dict;
         } catch (error) {
           await remove(id).catch(() => {});
+          onLog("导入失败，已清理未完成的数据");
           throw error;
         }
-      });
+      }, onLog);
     },
     async setEnabled(id: string, enabled: boolean) {
       const tx = (await db()).transaction("dictionaries", "readwrite");

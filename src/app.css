@@ -30,3 +30,4 @@ input { accent-color: #6d55bd; }
 .results header { display: flex; gap: 8px; align-items: baseline; }
 .results ul { white-space: pre-wrap; padding-inline-start: 20px; }
 progress { max-width: 100%; }
+.log { font: 12px/1.6 ui-monospace, SFMono-Regular, monospace; max-height: 128px; overflow: auto; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, CanvasText 7%, transparent); overflow-wrap: anywhere; }
