@@ -200,7 +200,6 @@ export function App() {
   }
 
   if (mode === "mini") return <main className="popup">
-    <header className="top"><span>MNDict</span><button type="button" onClick={() => host?.close()}>关闭</button></header>
     {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 
