@@ -97,12 +97,7 @@ export function App() {
     function onOpen(event: Event) {
       if (event instanceof CustomEvent) applyOpen(event.detail);
     }
-    function onShrink() {
-      // 软关闭：卡片瞬间缩到最小，面板保留待复用
-      host?.size(1, 1);
-    }
     addEventListener(settingsEvent, onOpen);
-    addEventListener("mn:mndict-shrink", onShrink);
     library.list().then((items) => { if (active) setDictionaries(items); })
       .catch((error: unknown) => { if (active) setStorageError(`无法打开插件词典存储：${errorText(error)}`); });
     if (host && __MN_NATIVE_BRIDGE__) {
@@ -149,7 +144,6 @@ export function App() {
     return () => {
       active = false;
       removeEventListener(settingsEvent, onOpen);
-      removeEventListener("mn:mndict-shrink", onShrink);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时执行一次
   }, []);
@@ -248,6 +242,7 @@ export function App() {
 
   if (mode === "mini") return <main className="popup">
     <div className="drag-title" aria-hidden="true">MNDict</div>
+    <button type="button" className="collapse" onClick={() => host?.size(1, 1)}>收起</button>
     {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 

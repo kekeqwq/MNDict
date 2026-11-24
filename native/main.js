@@ -36,7 +36,7 @@ function mndictWatchOutside(ctx) {
       }
     }
     if (!tap) return;
-    tap.cancelsTouchesInView = true;
+    tap.cancelsTouchesInView = false;
     view.addGestureRecognizer(tap);
     ctx.outsideTap = tap;
     ctx.outsideView = view;
@@ -44,45 +44,12 @@ function mndictWatchOutside(ctx) {
   } catch (error) {
     mndictLog("watchOutside error=" + error);
   }
-  // 冻结窗口视图树上所有轻点类识别器（含系统私有视图的，如弹出层点击关闭），关卡时恢复
-  ctx.disabledRecognizers = [];
-  mndictFreezeTaps(ctx.window, tap, ctx.disabledRecognizers, 0);
-  mndictLog("watchOutside 冻结宿主轻点识别器 " + ctx.disabledRecognizers.length + " 个");
-}
-
-// 递归冻结窗口树上的轻点类识别器（只动 tap 系，滚动/缩放不受影响）
-function mndictFreezeTaps(root, skip, out, depth) {
-  if (!root || depth > 24 || out.length > 64) return;
-  try {
-    var recs = root.gestureRecognizers || [];
-    for (var i = 0; i < recs.length; i++) {
-      var rec = recs[i];
-      if (rec && rec !== skip && rec.enabled && rec.numberOfTapsRequired !== undefined) {
-        rec.enabled = false;
-        out.push(rec);
-      }
-    }
-    var children = root.subviews || [];
-    for (var j = 0; j < children.length; j++) mndictFreezeTaps(children[j], skip, out, depth + 1);
-  } catch (error) {
-    // 单个视图失败不影响整体
-  }
 }
 
 function mndictUnwatchOutside(ctx) {
   if (ctx.outsideTap && ctx.outsideView) ctx.outsideView.removeGestureRecognizer(ctx.outsideTap);
   ctx.outsideTap = null;
   ctx.outsideView = null;
-  var recs = ctx.disabledRecognizers || [];
-  for (var i = 0; i < recs.length; i++) {
-    try {
-      recs[i].enabled = true;
-    } catch (restoreError) {
-      mndictLog("watchOutside restore error=" + restoreError);
-    }
-  }
-  if (recs.length) mndictLog("watchOutside 恢复宿主轻点识别器 " + recs.length + " 个");
-  ctx.disabledRecognizers = [];
 }
 
 function mndictClose(ctx) {
@@ -280,13 +247,7 @@ JSB.newAddon = function () {
       }
     },
     onOutsideTap: function () {
-      // 软关闭：缩到 1x1 瞬间隐形，不触发面板关闭/焦点变化（工具条的关闭就是点空白，不能惊动它）；
-      // 同时卸载自身识别器并恢复宿主识别器，第二下点击原样交给 MN。
-      if (self.panel && !self.settingsVisible) {
-        self.panel.post("mndict-shrink", {});
-        mndictUnwatchOutside(self);
-        mndictLog("outsideTap 软关闭完成");
-      }
+      if (self.panel && !self.settingsVisible) mndictClose(self);
     },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;
