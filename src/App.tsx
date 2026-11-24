@@ -6,7 +6,7 @@ const host = typeof mn === "undefined" ? undefined : mn;
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const settingsEvent = "mn:mndict-open";
 
-interface SettingsResponse { ok: boolean; autoLookup?: boolean; got?: string }
+interface SettingsResponse { ok: boolean; autoLookup?: boolean; got?: string; keys?: string }
 
 function Results({ state }: { state: { query: string; matches: Match[]; error?: string } | null }) {
   if (!state) return null;
@@ -111,7 +111,7 @@ export function App() {
   async function changeAutoLookup(enabled: boolean) {
     if (!host) return;
     await update(async () => {
-      const response = await host.call<SettingsResponse>("setAutoLookup", enabled);
+      const response = await host.call<SettingsResponse>("setAutoLookup", enabled ? "on" : "off");
       if (!response?.ok || response.autoLookup !== enabled) {
         throw new Error(`无法保存划词设置：${JSON.stringify(response)}`);
       }
