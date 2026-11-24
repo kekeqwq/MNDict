@@ -63,32 +63,6 @@ function mndictClose(ctx) {
 }
 
 // PDF 文字层上下文提取在 native/PageContext.js
-// 卡片描边：画在带圆角的层上，弧线与面板裁切完全吻合。返回是否画上（页面据此撤掉 CSS 兑底环）。
-function mndictPanelBorder(ctx) {
-  try {
-    var view = ctx.panel && ctx.panel.view;
-    var layer = view && view.layer;
-    if (layer && !(layer.cornerRadius > 0) && view.superview && view.superview.layer) layer = view.superview.layer;
-    if (!layer || !(layer.cornerRadius > 0)) {
-      mndictLog("panelBorder 找不到带圆角的层");
-      return false;
-    }
-    var theme = String(Application.sharedInstance().currentTheme || "").toLowerCase();
-    // 与页面的 resolvePalette 一致：白/棕褐/未知 → 浅色描边；灰/黑/绿 → 深色描边
-    var light = ["gray", "grey", "dark", "black", "green"].indexOf(theme) < 0;
-    var color = light
-      ? UIColor.colorWithRedGreenBlueAlpha(0.737, 0.753, 0.8, 1)
-      : UIColor.colorWithRedGreenBlueAlpha(0.286, 0.302, 0.392, 1);
-    layer.borderWidth = 1;
-    layer.borderColor = color.CGColor;
-    mndictLog("panelBorder 已画 radius=" + layer.cornerRadius + " light=" + light);
-    return true;
-  } catch (error) {
-    mndictLog("panelBorder error=" + error);
-    return false;
-  }
-}
-
 function mndictShow(ctx, mode, text, pageText) {
   var app = Application.sharedInstance();
   var controller = app.studyController(ctx.window);
@@ -131,8 +105,6 @@ function mndictShow(ctx, mode, text, pageText) {
   if (mode === "mini") mndictWatchOutside(ctx);
   else mndictUnwatchOutside(ctx);
   ctx.panel.showFloatingIn(controller);
-  var nativeBorder = mndictPanelBorder(ctx);
-  ctx.openState.nativeBorder = nativeBorder;
   // 查词卡固定在屏幕下部左侧：黑色工具条所在的中带之下，内容随 fit 向下生长
   if (mode === "mini") {
     try {

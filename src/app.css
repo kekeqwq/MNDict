@@ -2,9 +2,9 @@
 
 :root { font: 16px/1.58 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ctp-text); background: var(--ctp-base); }
 * { box-sizing: border-box; }
-body { margin: 0; padding: var(--mn-drag-h, 36px) 22px 18px; box-shadow: inset 0 0 0 1px var(--ctp-surface1); }
-/* 原生描边已跟随面板圆角画上时，撤掉矩形兑底环 */
-:root:has(main[data-native-border="true"]) body { box-shadow: none; }
+/* Safari 同款边缘：8% 黑发丝轮廓 + 顶部白高光 + 底部内影；半径 14pt 与面板裁切精确吻合（实测） */
+body { margin: 0; padding: var(--mn-drag-h, 36px) 22px 18px; border-radius: 14px;
+  box-shadow: inset 0 0 0 1px var(--ctp-hairline), inset 0 1.5px 1.5px 0 var(--ctp-hairline-hi), inset 0 -1px 1px 0 var(--ctp-hairline-lo); }
 h1, h2, p, ul { margin: 0; }
 h1 { font-size: 20px; }
 h2 { font-size: 15px; }

@@ -27,6 +27,9 @@
   --ctp-base: #eff1f5;
   --ctp-mantle: #e6e9ef;
   --ctp-crust: #dce0e8;
+  --ctp-hairline: rgba(0, 0, 0, 0.08);
+  --ctp-hairline-hi: rgba(255, 255, 255, 0.9);
+  --ctp-hairline-lo: rgba(0, 0, 0, 0.04);
 }
 
 :root:has(main[data-palette="macchiato"]) {
@@ -57,4 +60,7 @@
   --ctp-base: #24273a;
   --ctp-mantle: #1e2030;
   --ctp-crust: #181926;
+  --ctp-hairline: rgba(255, 255, 255, 0.22);
+  --ctp-hairline-hi: rgba(255, 255, 255, 0.25);
+  --ctp-hairline-lo: rgba(255, 255, 255, 0.06);
 }
