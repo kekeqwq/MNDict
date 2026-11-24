@@ -108,11 +108,16 @@ export function App() {
           appendLog(`发现备份词典 ${archive.id}（${(archive.size / 1048576).toFixed(1)} MiB），重建索引…`);
           try {
             const blob = await loadArchive(host, archive, appendLog);
-            const item = await library.importZip(blob, appendLog,
-              (done, total) => setProgress({ done, total }), archive.id);
-            appendLog(`重建完成：${item.title}（${item.count.toLocaleString()} 条）`);
+            try {
+              const item = await library.importZip(blob, appendLog,
+                (done, total) => setProgress({ done, total }), archive.id);
+              appendLog(`重建完成：${item.title}（${item.count.toLocaleString()} 条）`);
+            } catch (error) {
+              appendLog(`备份数据无效：${errorText(error)}，移入回收目录`);
+              await dropArchive(host, archive.id).catch(() => {});
+            }
           } catch (error) {
-            appendLog(`重建失败：${errorText(error)}`);
+            appendLog(`读取备份失败：${errorText(error)}`);
           }
         }
       });

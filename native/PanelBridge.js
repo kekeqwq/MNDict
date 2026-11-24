@@ -90,22 +90,35 @@ function mndictArchiveList() {
   return { ok: true, archives: archives };
 }
 
-function mndictArchivePut(name, id) {
-  var marker = "archivePutChunk:" + id + ":";
+function mndictArchivePut(name, id, expected) {
+  var marker = "archivePutChunk:" + id + ":" + expected + ":";
   var binary = mndictB64Decode(name.substring(marker.length));
+  if (binary.length !== expected) {
+    return { ok: false, wrote: 0, decoded: binary.length, detail: "传输丢字节" };
+  }
   var data = NSData.dataWithStringEncoding(binary, 5); // NSISOLatin1StringEncoding
-  if (!data) return { ok: false };
+  if (!data) return { ok: false, wrote: 0, detail: "NSData 转换失败" };
   var path = mndictArchivePath(id);
   var fm = NSFileManager.defaultManager();
   if (!fm.fileExistsAtPath(path)) {
-    return { ok: Boolean(data.writeToFileAtomically(path, true)) };
+    if (!data.writeToFileAtomically(path, true)) return { ok: false, wrote: 0, detail: "创建文件失败" };
+    var fresh = NSFileHandle.fileHandleForReadingAtPath(path);
+    var freshSize = fresh ? fresh.seekToEndOfFile() : -1;
+    if (fresh) fresh.closeFile();
+    return freshSize === expected ? { ok: true, wrote: freshSize } :
+      { ok: false, wrote: freshSize, detail: "落盘字节数不符" };
   }
   var writer = NSFileHandle.fileHandleForWritingAtPath(path);
-  if (!writer) return { ok: false };
-  writer.seekToEndOfFile();
+  if (!writer) return { ok: false, wrote: 0, detail: "打开文件失败" };
+  var before = writer.seekToEndOfFile();
   writer.writeData(data);
   writer.closeFile();
-  return { ok: true };
+  var check = NSFileHandle.fileHandleForReadingAtPath(path);
+  var after = check ? check.seekToEndOfFile() : before;
+  if (check) check.closeFile();
+  var grew = after - before;
+  return grew === expected ? { ok: true, wrote: grew } :
+    { ok: false, wrote: grew, detail: "落盘字节数不符" };
 }
 
 function mndictArchiveRead(id, offset, length) {
@@ -147,9 +160,10 @@ function mndictPanelMessage(name, payload, openState) {
     return { ok: true };
   }
   if (command === "archivePutChunk") {
-    if (!mndictValidId(parts[1])) return { ok: false };
+    var expected = parseInt(parts[2], 10) || 0;
+    if (!mndictValidId(parts[1]) || expected <= 0 || expected > 1024 * 1024) return { ok: false, wrote: 0, detail: "参数错误" };
     mndictEnsureDir();
-    return mndictArchivePut(String(name), parts[1]);
+    return mndictArchivePut(String(name), parts[1], expected);
   }
   if (command === "archiveRead") {
     var offset = parseInt(parts[2], 10) || 0;
