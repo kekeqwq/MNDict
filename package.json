@@ -1,0 +1,42 @@
+{
+  "name": "mndict",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "mn-rails build",
+    "package": "mn-rails package",
+    "sync": "mn-rails deploy",
+    "doctor": "mn-rails doctor",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "check": "eslint . --max-warnings=0 && tsc --noEmit",
+    "test": "tsx test/dictionary.test.ts"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "^2.25.0",
+    "idb": "^8.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "wink-lemmatizer": "^3.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@html-eslint/eslint-plugin": "^0.67.0",
+    "@html-eslint/parser": "^0.67.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.8",
+    "globals": "^17.13.0",
+    "mn-rails": "^2.0.4",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.72.0",
+    "vite": "^8.3.4"
+  }
+}

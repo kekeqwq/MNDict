@@ -1,0 +1,18 @@
+{
+  "id": "u-io-github-kekeqwq-mndict",
+  "name": "MNDict",
+  "minAppVersion": "5.0.0",
+  "plugins": ["io.github.kekeqwq.mndict"],
+  "pluginConfigs": {
+    "io.github.kekeqwq.mndict": {}
+  },
+  "bottom": {
+    "modes": [
+      {
+        "id": "collect",
+        "behavior": "write",
+        "tools": ["tool.excerptBox", "addon.io.github.kekeqwq.mndict.primary", "theme"]
+      }
+    ]
+  }
+}

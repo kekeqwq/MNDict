@@ -1,0 +1,135 @@
+import { openDB, type DBSchema } from "idb";
+import lemmatizer from "wink-lemmatizer";
+import { readDictionary, type DictionaryInfo, type Entry } from "./yomitan";
+
+export interface Dictionary extends DictionaryInfo {
+  id: string;
+  enabled: boolean;
+  ready: boolean;
+  order: number;
+  count: number;
+}
+
+interface Term extends Entry { dictionaryId: string; key: string }
+export interface Match extends Entry { dictionary: string }
+
+interface Data extends DBSchema {
+  dictionaries: { key: string; value: Dictionary };
+  terms: { key: number; value: Term; indexes: { lookup: [string, string]; dictionary: string } };
+}
+
+// String normalization; this does not touch the DOM.
+// eslint-disable-next-line no-restricted-syntax
+const normalize = (text: string) => text.normalize("NFKC").trim().toLowerCase().replaceAll("’", "'");
+
+export function searchKeys(text: string): string[] {
+  const query = normalize(text);
+  if (!query) return [];
+  const keys = [query];
+  if (/^[a-z][a-z' -]*$/.test(query)) {
+    const words = query.match(/[a-z]+(?:'[a-z]+)*/g);
+    if (words?.length === 1) {
+      const word = words[0].replace(/'s$/, "");
+      keys.push(word, lemmatizer.noun(word), lemmatizer.verb(word), lemmatizer.adjective(word));
+    }
+  }
+  return [...new Set(keys)];
+}
+
+export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library") {
+  let connection: ReturnType<typeof openDB<Data>> | undefined;
+  const db = () => connection ??= openDB<Data>(name, 1, {
+    upgrade(database) {
+      database.createObjectStore("dictionaries", { keyPath: "id" });
+      const terms = database.createObjectStore("terms", { autoIncrement: true });
+      terms.createIndex("lookup", ["dictionaryId", "key"]);
+      terms.createIndex("dictionary", "dictionaryId");
+    },
+    terminated() { connection = undefined; },
+  }).catch((error: unknown) => { connection = undefined; throw error; });
+
+  async function list() {
+    return (await (await db()).getAll("dictionaries")).filter((dict) => dict.ready)
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  }
+
+  async function remove(id: string) {
+    const database = await db();
+    const tx = database.transaction(["terms", "dictionaries"], "readwrite");
+    let cursor = await tx.objectStore("terms").index("dictionary").openKeyCursor(id);
+    while (cursor) {
+      await tx.objectStore("terms").delete(cursor.primaryKey);
+      cursor = await cursor.continue();
+    }
+    await tx.objectStore("dictionaries").delete(id);
+    await tx.done;
+  }
+
+  return {
+    list, deleteDictionary: remove,
+    async importZip(blob: Blob, progress: (done: number, total: number) => void = () => {}) {
+      return readDictionary(blob, async (info, banks, total) => {
+        const database = await db();
+        const dictionaries = await list();
+        if (dictionaries.some((item) => item.title === info.title && item.revision === info.revision)) {
+          throw new Error("已导入同名同版本词典");
+        }
+        const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        const dict: Dictionary = { ...info, id, enabled: true, ready: false,
+          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0 };
+        await database.put("dictionaries", dict);
+        let done = 0;
+        try {
+          progress(done, total);
+          for await (const bank of banks) {
+            for (let i = 0; i < bank.length; i += 500) {
+              const tx = database.transaction("terms", "readwrite");
+              await Promise.all([...bank.slice(i, i + 500).map((entry) => tx.store.add({
+                ...entry, dictionaryId: id, key: normalize(entry.term),
+              })), tx.done]);
+            }
+            dict.count += bank.length;
+            progress(++done, total);
+          }
+          if (!dict.count) throw new Error("词典没有词条");
+          dict.ready = true;
+          await database.put("dictionaries", dict);
+          return dict;
+        } catch (error) {
+          await remove(id).catch(() => {});
+          throw error;
+        }
+      });
+    },
+    async setEnabled(id: string, enabled: boolean) {
+      const tx = (await db()).transaction("dictionaries", "readwrite");
+      const item = await tx.store.get(id);
+      if (item?.ready) await tx.store.put({ ...item, enabled });
+      await tx.done;
+    },
+    async move(id: string, direction: -1 | 1) {
+      const tx = (await db()).transaction("dictionaries", "readwrite");
+      const sorted = (await tx.store.getAll()).filter((item) => item.ready)
+        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const index = sorted.findIndex((item) => item.id === id);
+      const neighbor = index + direction;
+      const current = sorted[index];
+      const next = sorted[neighbor];
+      if (current && next) {
+        [sorted[index], sorted[neighbor]] = [next, current];
+        await Promise.all(sorted.map((item, position) => tx.store.put({ ...item, order: position + 1 })));
+      }
+      await tx.done;
+    },
+    async search(text: string): Promise<Match[]> {
+      const keys = searchKeys(text);
+      const dictionaries = (await list()).filter((item) => item.enabled);
+      const index = (await db()).transaction("terms").store.index("lookup");
+      const matches = await Promise.all(keys.map((key) => Promise.all(dictionaries.map(async (dict) => {
+        const entries = await index.getAll([dict.id, key], 50);
+        return entries.sort((a, b) => b.score - a.score).slice(0, 12).map((entry) => ({ ...entry, dictionary: dict.title }));
+      }))));
+      return matches.flat(2).slice(0, 80);
+    },
+  };
+}

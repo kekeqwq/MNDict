@@ -1,0 +1,32 @@
+:root { color-scheme: light dark; font: 15px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; color: CanvasText; background: Canvas; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: var(--mn-drag-h, 36px) 14px 14px; }
+h1, h2, p, ul { margin: 0; }
+h1 { font-size: 20px; }
+h2 { font-size: 15px; }
+small, .top p { color: GrayText; }
+button, input { font: inherit; }
+button, .file-label, .search input { border: 1px solid color-mix(in srgb, CanvasText 24%, transparent); border-radius: 8px; padding: 5px 9px; }
+button, .file-label { color: CanvasText; background: ButtonFace; cursor: pointer; }
+button:disabled, .file-label:has(input:disabled) { opacity: .5; cursor: default; }
+input { accent-color: #6d55bd; }
+.settings, .group { display: grid; gap: 10px; }
+.group { padding: 11px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 11px; }
+.top, .actions, .search, .switch, .dict-name { display: flex; align-items: center; gap: 6px; }
+.top { justify-content: space-between; }
+.file-label { position: relative; }
+.file-label:focus-within { outline: 2px solid Highlight; }
+.file-label input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; }
+.library { list-style: none; padding: 0; display: grid; gap: 6px; }
+.library li { display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; align-items: center; }
+.dict-name { min-width: 0; overflow-wrap: anywhere; }
+.dict-name small { display: block; }
+.confirm { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.search input { background: Canvas; color: CanvasText; min-width: 0; flex: 1; }
+.popup { display: grid; gap: 6px; }
+.results { overflow-wrap: anywhere; }
+.results h2 { font-size: 19px; }
+.results article { border-top: 1px solid color-mix(in srgb, CanvasText 18%, transparent); margin-top: 6px; padding-top: 6px; }
+.results header { display: flex; gap: 8px; align-items: baseline; }
+.results ul { white-space: pre-wrap; padding-inline-start: 20px; }
+progress { max-width: 100%; }

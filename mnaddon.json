@@ -1,0 +1,12 @@
+{
+  "addonid": "io.github.kekeqwq.mndict",
+  "author": "keke",
+  "title": "MNDict",
+  "version": "0.1.0",
+  "marginnote_version_min": "5.0.0",
+  "immersiveOnly": true,
+  "panel": "index.html",
+  "icon": "icon.png",
+  "panelWidth": 420,
+  "panelMaxHeight": 680
+}
