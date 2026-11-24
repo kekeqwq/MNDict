@@ -54,18 +54,37 @@ export function cleanDictionaryCss(css: string): string {
     .slice(0, maxCssBytes);
 }
 
-// 选择器统一加前缀，词典 CSS 不外溢到插件界面
+// 选择器统一加前缀，词典 CSS 不外溢到插件界面；支持 @media/@container 内递归作用域化
 export function scopeDictionaryCss(css: string, scope = ".glossary"): string {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const rules: string[] = [];
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const selector = (match[1] ?? "").trim();
-    const body = (match[2] ?? "").trim();
-    if (!selector || !body || selector.startsWith("@")) continue;
-    const scoped = selector.split(",").map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => /^(html|body|head|:root|\*)$/i.test(part) ? scope : `${scope} ${part}`)
-      .join(", ");
-    if (scoped) rules.push(`${scoped}{${body}}`);
+  let index = 0;
+  while (index < clean.length) {
+    const open = clean.indexOf("{", index);
+    if (open < 0) break;
+    const selector = clean.slice(index, open).trim();
+    let depth = 1;
+    let end = open + 1;
+    while (end < clean.length && depth > 0) {
+      if (clean[end] === "{") depth += 1;
+      else if (clean[end] === "}") depth -= 1;
+      end += 1;
+    }
+    const body = clean.slice(open + 1, end - 1);
+    if (selector.startsWith("@")) {
+      if (/^@(media|container|supports)\b/i.test(selector)) {
+        const inner = scopeDictionaryCss(body, scope);
+        if (inner) rules.push(`${selector}{${inner}}`);
+      }
+    } else {
+      const scoped = selector.split(",").map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => /^(html|body|head|:root|\*)$/i.test(part) ? scope : `${scope} ${part}`)
+        .join(", ");
+      const declarations = body.trim();
+      if (scoped && declarations && !declarations.includes("{")) rules.push(`${scoped}{${declarations}}`);
+    }
+    index = end;
   }
   return rules.join("\n");
 }

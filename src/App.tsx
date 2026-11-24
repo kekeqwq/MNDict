@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } from "./dictionary";
@@ -52,6 +52,7 @@ export function App() {
   const [message, setMessage] = useState("");
   const [storageError, setStorageError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingClear, setPendingClear] = useState<"cache" | "all" | null>(null);
   const lookupVersion = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const dictCss = useMemo(() => dictionaries.filter((dict) => dict.enabled && dict.css)
@@ -187,9 +188,15 @@ export function App() {
     });
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void search(query);
+  async function clearData(kind: "cache" | "all") {
+    await update(async () => {
+      await library.clearAll();
+      if (kind === "all" && host && __MN_NATIVE_BRIDGE__) {
+        for (const archive of await listArchives(host)) await dropArchive(host, archive.id);
+      }
+      setMessage(kind === "cache" ? "已清空查询缓存，打开面板时会从备份自动重建" : "已清空全部词典数据");
+      setPendingClear(null);
+    });
   }
 
   if (mode === "mini") return <main className="popup">
@@ -249,11 +256,14 @@ export function App() {
         </div> : null}
       </li>)}</ul>
       {message ? <p role="status">{message}</p> : null}
-    </section>
-    <section className="group"><h2>试查</h2>
-      <form className="search" onSubmit={submit}><input aria-label="输入单词" placeholder="输入单词" maxLength={120} value={query} onChange={(event) => setQuery(event.currentTarget.value)} />
-        <button type="submit" disabled={busy || !query.trim() || !!storageError}>查询</button></form>
-      <Results state={result} css={dictCss} />
+      <div className="actions">
+        <button type="button" disabled={busy || !!storageError} onClick={() => setPendingClear("cache")}>清空缓存</button>
+        <button type="button" disabled={busy || !!storageError} onClick={() => setPendingClear("all")}>清空全部存储</button>
+      </div>
+      {pendingClear ? <div className="confirm">{pendingClear === "cache" ? "清空查询缓存？词典会从备份自动重建。" : "删除全部词典与备份？不可恢复。"}
+        <button type="button" disabled={busy} onClick={() => void clearData(pendingClear)}>确认</button>
+        <button type="button" onClick={() => setPendingClear(null)}>取消</button>
+      </div> : null}
     </section>
   </main>;
 }

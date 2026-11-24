@@ -3,7 +3,7 @@ import type { GlossaryItem, GlossaryNode } from "./yomitan";
 
 const ALLOWED_TAGS = new Set(["div", "p", "span", "br", "ol", "ul", "li", "table", "thead", "tbody",
   "tfoot", "tr", "td", "th", "ruby", "rt", "rp", "b", "i", "u", "strong", "em", "s", "sub", "sup",
-  "dl", "dt", "dd"]);
+  "dl", "dt", "dd", "details", "summary"]);
 const CSS_VALUE = /^[a-zA-Z0-9 #%.,'"~/-]*$/;
 
 // 词典 style 对象转成唯一类名，规则注入同级 <style>；规避内联样式。
@@ -29,14 +29,18 @@ function renderNode(node: GlossaryItem, key: string, registry: Map<string, strin
   if (!node || typeof node !== "object") return null;
   const item = node as GlossaryNode;
   if (item.type === "image") return item.alt ? createElement("span", { key, className: "mn-alt" }, item.alt) : null;
+  if (item.type === "structured-content" && item.content !== undefined) {
+    return renderNode(item.content, `${key}-sc`, registry);
+  }
   if (typeof item.text === "string" && (item.type === "text" || !item.tag)) return item.text;
   const tag = typeof item.tag === "string" && ALLOWED_TAGS.has(item.tag) ? item.tag : "span";
   const props: Record<string, unknown> = { key };
   const classes: string[] = [];
+  // Yomitan 约定：data 键渲染为 data-sc-<键> 属性（词典 CSS 按 [data-sc-*] 选择）
   for (const [name, value] of Object.entries(item.data ?? {})) {
-    if (name === "class" || name === "className") classes.push(String(value));
-    else if (name === "lang" || name === "title") props[name] = String(value);
-    else if (/^[a-z][a-z0-9-]*$/.test(name)) props[`data-${name}`] = String(value);
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) continue;
+    props[`data-sc-${name}`] = String(value);
+    if (name === "class") classes.push(String(value));
   }
   if (item.lang) props.lang = item.lang;
   if (tag === "td" || tag === "th") {

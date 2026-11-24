@@ -72,6 +72,10 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
 
   return {
     list, deleteDictionary: remove,
+    async clearAll() {
+      const tx = (await db()).transaction(["terms", "dictionaries"], "readwrite");
+      await Promise.all([tx.objectStore("terms").clear(), tx.objectStore("dictionaries").clear(), tx.done]);
+    },
     async importZip(blob: Blob, onLog: (message: string) => void = () => {},
       onProgress: (done: number, total: number) => void = () => {}, archiveId?: string) {
       return readDictionary(blob, async (info, banks, total) => {
