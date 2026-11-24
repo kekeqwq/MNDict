@@ -39,7 +39,8 @@ function Results({ state, css }: { state: QueryResult | null; css: string }) {
 }
 
 export function App() {
-  const [mode, setMode] = useState(() => host?.currentMode ?? "workspace");
+  const [mode, setMode] = useState<"workspace" | "mini" | null>(
+    () => (host && __MN_NATIVE_BRIDGE__) ? null : "workspace");
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [autoLookup, setAutoLookup] = useState<boolean | null>(null);
   const [autoPlay, setAutoPlay] = useState<boolean | null>(null);
@@ -160,7 +161,7 @@ export function App() {
   }, [mode]);
 
   useEffect(() => {
-    if (!host) return;
+    if (!host || !mode) return;
     host.size(mode === "workspace" ? 480 : 420, mode === "workspace" ? 640 : 420);
   }, [mode]);
 
@@ -223,6 +224,9 @@ export function App() {
       setPendingClear(null);
     });
   }
+
+  // 模式未定时渲染空白，避免设置界面在查词时闪现
+  if (mode === null) return <main className="popup" aria-busy="true" />;
 
   if (mode === "mini") return <main className="popup">
     <div className="drag-title" aria-hidden="true">MNDict</div>
