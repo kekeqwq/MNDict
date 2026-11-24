@@ -88,6 +88,7 @@ function mndictShow(ctx, mode, text) {
         }
         return { ok: true };
       }
+      if (name === "askAI") return mndictAskAI(ctx);
       return mndictPanelMessage(name, payload, ctx.openState);
     };
     if (!panel.loadPanel()) {
@@ -102,6 +103,24 @@ function mndictShow(ctx, mode, text) {
   else mndictUnwatchOutside(ctx);
   ctx.panel.showFloatingIn(controller);
   ctx.panel.post("mndict-open", ctx.openState);
+}
+
+function mndictAskAI(ctx) {
+  try {
+    var controller = Application.sharedInstance().studyController(ctx.window);
+    var doc = controller && controller.readerController && controller.readerController.currentDocumentController;
+    var word = doc && doc.selectionText ? String(doc.selectionText).trim() : "";
+    if (!word) return { ok: false, detail: "没有选区" };
+    mndictLog("askAI word=" + word.substring(0, 40));
+    Application.sharedInstance().aiWordInContext(null, word, "", function (result) {
+      mndictLog("askAI completion=" + String(result).substring(0, 120));
+    });
+    mndictClose(ctx);
+    return { ok: true };
+  } catch (error) {
+    mndictLog("askAI error=" + error);
+    return { ok: false, detail: String(error) };
+  }
 }
 
 JSB.newAddon = function () {

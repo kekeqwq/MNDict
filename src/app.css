@@ -38,6 +38,7 @@ progress { max-width: 100%; }
 .results header { display: flex; gap: 8px; align-items: baseline; }
 .audio { display: inline-flex; gap: 4px; margin-inline-start: auto; }
 .audio button { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.audio .ask-ai { font-weight: 600; color: #fff; background: #8b5cf6; border-color: #8b5cf6; }
 .glossary { overflow-wrap: anywhere; line-height: 1.62; container-type: inline-size; --text-color: CanvasText; --fg-color: CanvasText; }
 .glossary p, .glossary ol, .glossary ul { margin: 5px 0; }
 .glossary li { margin: 3px 0; }

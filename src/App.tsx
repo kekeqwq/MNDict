@@ -17,9 +17,20 @@ interface QueryResult { query: string; matches: Match[]; error?: string }
 function AudioButtons({ match }: { match: Match }) {
   const japanese = isJapanese(match.term + match.reading);
   return <span className="audio">
+    <button type="button" className="ask-ai" onClick={() => void askNativeAI()}>✦ Ask AI</button>
     <button type="button" aria-label="播放发音" onClick={() => void playAudio(match.term, match.reading, 2)}>🔊</button>
     {japanese ? null : <button type="button" aria-label="英式发音" onClick={() => void playAudio(match.term, match.reading, 1)}>英</button>}
   </span>;
+}
+
+// 呼出 MarginNote 原生 Ask AI（自动带上当前选区语境），成功后原生侧关闭本卡片
+async function askNativeAI() {
+  if (!host || !__MN_NATIVE_BRIDGE__) return;
+  try {
+    await host.call<{ ok: boolean }>("askAI");
+  } catch {
+    // 原生日志已记录失败原因
+  }
 }
 
 function Results({ state, css }: { state: QueryResult | null; css: string }) {
