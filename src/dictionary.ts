@@ -105,7 +105,7 @@ export function createDictionaryStore(host?: Mn) {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         const result = await call<{ ok: boolean; wrote?: number; detail?: string }>(`${marker}${btoa(binary)}`);
         if (result?.ok && result.wrote === part.length) { done = true; break; }
-        detail = `第 ${attempt} 次 ${result?.detail ?? "失败"}（落盘 ${result?.wrote ?? 0}/${part.length}）`;
+        detail = `第 ${attempt} 次 ${JSON.stringify(result)}`;
         if (result?.wrote) break;
       }
       if (!done) throw new Error(`词条数据写入失败：${detail}`);

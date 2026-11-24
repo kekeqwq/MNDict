@@ -132,13 +132,23 @@ function ndImportTerms(dictId, file) {
   return { ok: true, count: count };
 }
 
-function ndStagePut(name, parts) {
-  var file = parts[2];
-  if (!/^[A-Za-z0-9_.-]{1,80}$/.test(file)) return { ok: false, wrote: 0, detail: "文件名非法" };
-  var expected = parseInt(parts[3], 10) || 0;
-  var marker = "db:stageChunk:" + file + ":" + expected + ":";
-  var binary = ndB64Decode(name.substring(marker.length));
-  if (binary.length !== expected) return { ok: false, wrote: 0, decoded: binary.length, detail: "传输丢字节" };
+function ndStagePut(name) {
+  var rest = name.substring("db:stageChunk:".length);
+  var cut1 = rest.indexOf(":");
+  var cut2 = rest.indexOf(":", cut1 + 1);
+  var file = cut1 < 0 ? "" : rest.substring(0, cut1);
+  var expected = cut2 < 0 ? 0 : parseInt(rest.substring(cut1 + 1, cut2), 10) || 0;
+  var payload = cut2 < 0 ? "" : rest.substring(cut2 + 1);
+  if (!/^[A-Za-z0-9_.-]{1,80}$/.test(file)) return { ok: false, wrote: 0, detail: "文件名非法 " + file };
+  var binary = ndB64Decode(payload);
+  if (binary.length !== expected) {
+    return {
+      ok: false, wrote: 0, decoded: binary.length,
+      detail: "传输丢字节 got=" + binary.length + " want=" + expected +
+        " payload=" + payload.length + " name=" + name.length +
+        " tail=" + payload.substring(Math.max(0, payload.length - 10)),
+    };
+  }
   ndEnsureDir();
   var fm = NSFileManager.defaultManager();
   fm.createDirectoryAtPathWithIntermediateDirectoriesAttributes(ndDir() + "/staging", true, null);
@@ -184,7 +194,7 @@ function mndictDbCommand(name, parts) {
     ndEnsureDir();
     return { ok: true };
   }
-  if (op === "stageChunk") return ndStagePut(String(name), parts);
+  if (op === "stageChunk") return ndStagePut(String(name));
   if (op === "stageDrop") {
     var target = ndDir() + "/staging/" + (parts[2] || "");
     if (/^[A-Za-z0-9_.-]+$/.test(parts[2] || "")) {
