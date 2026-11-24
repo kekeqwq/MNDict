@@ -109,10 +109,10 @@ function mndictShow(ctx, mode, text) {
       var panelView = ctx.panel.view;
       if (panelView && bounds) {
         var y = Math.round(bounds.height * 0.44);
-        var h = Math.max(240, Math.round(bounds.height * 0.5) - 24);
-        panelView.frame = { x: 16, y: y, width: 420, height: h };
+        var h = Math.max(280, Math.round(bounds.height * 0.56) - 84);
+        panelView.frame = { x: 8, y: y, width: Math.round(bounds.width * 0.46), height: h };
         ctx.panel.maxContentHeight = h;
-        mndictLog("show mini 定位 y=" + y + " h=" + h);
+        mndictLog("show mini 定位 x=8 y=" + y + " w=" + Math.round(bounds.width * 0.46) + " h=" + h);
       }
     } catch (frameError) {
       mndictLog("show frame error=" + frameError);

@@ -174,7 +174,9 @@ export function App() {
 
   useEffect(() => {
     if (!host || !mode) return;
-    host.size(mode === "workspace" ? 480 : 420, mode === "workspace" ? 640 : 420);
+    // 迷你查词卡尺寸由原生固定定位决定，页面不覆盖
+    if (mode === "mini") return;
+    host.size(480, 640);
   }, [mode]);
 
   useEffect(() => {
