@@ -38,6 +38,9 @@ const NATIVE_GLOBALS = [
   "mndictAutoLookup",
   "mndictPanelMessage",
   "mndictLog",
+  "mndictDbCommand",
+  "SQLiteDatabase",
+  "NSString",
   "console",
 ];
 

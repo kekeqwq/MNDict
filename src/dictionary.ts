@@ -1,26 +1,28 @@
-import { openDB, type DBSchema } from "idb";
-import lemmatizer from "wink-lemmatizer";
+import { utf8ToBase64 } from "./codec";
 import { readDictionary, redirectTarget, type DictionaryInfo, type Entry, type GlossaryItem } from "./yomitan";
+import lemmatizer from "wink-lemmatizer";
 
 export interface Dictionary extends DictionaryInfo {
   id: string;
   enabled: boolean;
-  ready: boolean;
   order: number;
   count: number;
   parser: number;
   archiveId?: string;
 }
 
-interface Term extends Entry { dictionaryId: string; key: string }
 export interface Match extends Entry { dictionary: string }
 
 // 解析器版本：旧索引在打开面板时从备份自动重建
 export const PARSER_VERSION = 2;
 
-interface Data extends DBSchema {
-  dictionaries: { key: string; value: Dictionary };
-  terms: { key: number; value: Term; indexes: { lookup: [string, string]; dictionary: string } };
+interface DbDict {
+  id: string; title: string; revision: string; sourceLanguage: string; css: string;
+  enabled: boolean; ord: number; count: number; archiveId: string; parser: number;
+}
+
+interface DbRow {
+  dictId: string; key: string; term: string; reading: string; tags: string; score: number; defs: string;
 }
 
 // String normalization; this does not touch the DOM.
@@ -35,123 +37,172 @@ export function searchKeys(text: string): string[] {
     const words = query.match(/[a-z]+(?:'[a-z]+)*/g);
     if (words?.length === 1) {
       const word = words[0].replace(/'s$/, "");
-      keys.push(word, lemmatizer.noun(word), lemmatizer.verb(word), lemmatizer.adjective(word));
+      keys.push(word, lemmatize(word, "noun"), lemmatize(word, "verb"), lemmatize(word, "adjective"));
     }
   }
   return [...new Set(keys)];
 }
 
-export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library") {
-  let connection: ReturnType<typeof openDB<Data>> | undefined;
-  const db = () => connection ??= openDB<Data>(name, 1, {
-    upgrade(database) {
-      database.createObjectStore("dictionaries", { keyPath: "id" });
-      const terms = database.createObjectStore("terms", { autoIncrement: true });
-      terms.createIndex("lookup", ["dictionaryId", "key"]);
-      terms.createIndex("dictionary", "dictionaryId");
-    },
-    terminated() { connection = undefined; },
-  }).catch((error: unknown) => { connection = undefined; throw error; });
+function lemmatize(word: string, part: "noun" | "verb" | "adjective"): string {
+  try {
+    return lemmatizer[part](word);
+  } catch {
+    return word;
+  }
+}
 
-  async function list() {
-    return (await (await db()).getAll("dictionaries")).filter((dict) => dict.ready)
-      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)),
+  (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+// 词典库经 mn.call 命令走原生 SQLite（native/NativeDb.js）；参数一律 base64 编码进命令名。
+export function createDictionaryStore(host?: Mn) {
+  function call<T>(name: string): Promise<T> {
+    if (!host) return Promise.reject(new Error("原生存储不可用（缺少原生桥接）"));
+    return host.call<T>(name);
   }
 
-  async function remove(id: string) {
-    const database = await db();
-    const tx = database.transaction(["terms", "dictionaries"], "readwrite");
-    let cursor = await tx.objectStore("terms").index("dictionary").openKeyCursor(id);
-    while (cursor) {
-      await tx.objectStore("terms").delete(cursor.primaryKey);
-      cursor = await cursor.continue();
+  async function list(): Promise<Dictionary[]> {
+    const result = await call<{ ok: boolean; dictionaries?: DbDict[] }>("db:list");
+    if (!result?.ok) throw new Error("读取词典列表失败");
+    return (result.dictionaries ?? []).map((row) => ({
+      id: row.id, title: row.title, revision: row.revision,
+      ...(row.sourceLanguage ? { sourceLanguage: row.sourceLanguage } : {}),
+      ...(row.css ? { css: row.css } : {}),
+      enabled: row.enabled, order: row.ord, count: row.count, parser: row.parser,
+      ...(row.archiveId ? { archiveId: row.archiveId } : {}),
+    }));
+  }
+
+  async function putDict(dict: Dictionary): Promise<void> {
+    const row: DbDict = {
+      id: dict.id, title: dict.title, revision: dict.revision,
+      sourceLanguage: dict.sourceLanguage ?? "", css: dict.css ?? "",
+      enabled: dict.enabled, ord: dict.order, count: dict.count,
+      archiveId: dict.archiveId ?? "", parser: dict.parser,
+    };
+    const result = await call<{ ok: boolean }>(`db:putDict:${utf8ToBase64(JSON.stringify(row))}`);
+    if (!result?.ok) throw new Error("写入词典记录失败");
+  }
+
+  async function lookup(keys: string[]): Promise<DbRow[]> {
+    const result = await call<{ ok: boolean; rows?: DbRow[] }>(`db:lookup:${utf8ToBase64(JSON.stringify(keys))}`);
+    if (!result?.ok) throw new Error("查询失败");
+    return result.rows ?? [];
+  }
+
+  // 分块写入暂存文件（与备份同一套强校验传输）
+  async function stageText(file: string, text: string): Promise<void> {
+    await call(`db:stageBegin:${file}`);
+    const bytes = new TextEncoder().encode(text);
+    const chunkSize = 24 * 1024;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      const part = bytes.subarray(offset, offset + chunkSize);
+      let binary = "";
+      for (let i = 0; i < part.length; i += 1) binary += String.fromCharCode(part[i] as number);
+      const marker = `db:stageChunk:${file}:${part.length}:`;
+      let detail = "无响应";
+      let done = false;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const result = await call<{ ok: boolean; wrote?: number; detail?: string }>(`${marker}${btoa(binary)}`);
+        if (result?.ok && result.wrote === part.length) { done = true; break; }
+        detail = `第 ${attempt} 次 ${result?.detail ?? "失败"}（落盘 ${result?.wrote ?? 0}/${part.length}）`;
+        if (result?.wrote) break;
+      }
+      if (!done) throw new Error(`词条数据写入失败：${detail}`);
     }
-    await tx.objectStore("dictionaries").delete(id);
-    await tx.done;
   }
 
   return {
-    list, deleteDictionary: remove,
-    async clearAll() {
-      const tx = (await db()).transaction(["terms", "dictionaries"], "readwrite");
-      await Promise.all([tx.objectStore("terms").clear(), tx.objectStore("dictionaries").clear(), tx.done]);
-    },
+    list,
+
     async importZip(blob: Blob, onLog: (message: string) => void = () => {},
-      onProgress: (done: number, total: number) => void = () => {}, archiveId?: string) {
+      onProgress: (done: number, total: number) => void = () => {}, archiveId?: string): Promise<Dictionary> {
       return readDictionary(blob, async (info, banks, total) => {
-        const database = await db();
-        const dictionaries = await list();
-        if (dictionaries.some((item) => item.title === info.title && item.revision === info.revision)) {
+        const existing = await list();
+        if (existing.some((item) => item.title === info.title && item.revision === info.revision)) {
           throw new Error("已导入同名同版本词典");
         }
-        const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
-        const dict: Dictionary = { ...info, id, enabled: true, ready: false,
-          order: (dictionaries.at(-1)?.order ?? 0) + 1, count: 0, parser: PARSER_VERSION,
-          ...(archiveId ? { archiveId } : {}) };
-        await database.put("dictionaries", dict);
+        const id = randomId();
+        const dict: Dictionary = {
+          ...info, id, enabled: true, order: (existing.at(-1)?.order ?? 0) + 1,
+          count: 0, parser: PARSER_VERSION, ...(archiveId ? { archiveId } : {}),
+        };
+        await putDict(dict);
         let done = 0;
         try {
-          onProgress(done, total);
           for await (const bank of banks) {
-            for (let i = 0; i < bank.length; i += 500) {
-              const tx = database.transaction("terms", "readwrite");
-              await Promise.all([...bank.slice(i, i + 500).map((entry) => tx.store.add({
-                ...entry, dictionaryId: id, key: normalize(entry.term),
-              })), tx.done]);
-            }
-            dict.count += bank.length;
+            const lines = bank.map((entry) => JSON.stringify([
+              normalize(entry.term), entry.term, entry.reading, entry.tags, entry.score,
+              JSON.stringify(entry.definitions),
+            ])).join("\n");
+            await stageText(`${id}.${done}.jsonl`, lines);
+            const result = await call<{ ok: boolean; count?: number }>(`db:importTerms:${id}:${id}.${done}.jsonl`);
+            if (!result?.ok) throw new Error("词条入库失败");
+            dict.count += result.count ?? 0;
             onLog(`已写入 ${dict.count.toLocaleString()} 条`);
             onProgress(++done, total);
           }
           if (!dict.count) throw new Error("词典没有词条");
-          dict.ready = true;
-          await database.put("dictionaries", dict);
+          await putDict(dict);
           onLog(`导入完成：${dict.count.toLocaleString()} 条`);
           return dict;
         } catch (error) {
-          await remove(id).catch(() => {});
+          await call(`db:delDict:${id}`).catch(() => {});
           onLog("导入失败，已清理未完成的数据");
           throw error;
         }
       }, onLog);
     },
-    async setEnabled(id: string, enabled: boolean) {
-      const tx = (await db()).transaction("dictionaries", "readwrite");
-      const item = await tx.store.get(id);
-      if (item?.ready) await tx.store.put({ ...item, enabled });
-      await tx.done;
-    },
-    async move(id: string, direction: -1 | 1) {
-      const tx = (await db()).transaction("dictionaries", "readwrite");
-      const sorted = (await tx.store.getAll()).filter((item) => item.ready)
-        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-      const index = sorted.findIndex((item) => item.id === id);
-      const neighbor = index + direction;
-      const current = sorted[index];
-      const next = sorted[neighbor];
-      if (current && next) {
-        [sorted[index], sorted[neighbor]] = [next, current];
-        await Promise.all(sorted.map((item, position) => tx.store.put({ ...item, order: position + 1 })));
-      }
-      await tx.done;
-    },
+
     async search(text: string): Promise<Match[]> {
       const keys = searchKeys(text);
-      const dictionaries = (await list()).filter((item) => item.enabled);
-      const index = (await db()).transaction("terms").store.index("lookup");
-      const matches = await Promise.all(keys.map((key) => Promise.all(dictionaries.map(async (dict) => {
-        const entries = await index.getAll([dict.id, key], 50);
-        return Promise.all(entries.sort((a, b) => b.score - a.score).slice(0, 12).map(async (entry) => {
-          let definitions: GlossaryItem[] = entry.definitions;
-          const target = definitions.length === 1 ? redirectTarget(definitions[0] as GlossaryItem) : undefined;
-          if (target) {
-            const resolved = await index.getAll([dict.id, normalize(target)], 3);
-            if (resolved[0]) definitions = resolved[0].definitions;
-          }
-          return { ...entry, definitions, dictionary: dict.title };
-        }));
-      }))));
-      return matches.flat(2).slice(0, 80);
+      const dicts = (await list()).filter((item) => item.enabled)
+        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const rank = new Map(dicts.map((item, index) => [item.id, index]));
+      const titles = new Map(dicts.map((item) => [item.id, item.title]));
+      const rows = (await lookup(keys)).filter((row) => rank.has(row.dictId));
+      const resolved: DbRow[] = [];
+      for (const row of rows) {
+        let definitions = JSON.parse(row.defs) as GlossaryItem[];
+        const target = definitions.length === 1 ? redirectTarget(definitions[0] as GlossaryItem) : undefined;
+        if (target) {
+          const hits = await lookup([normalize(target)]);
+          const hit = hits.find((item) => item.dictId === row.dictId && item.term === target)
+            ?? hits.find((item) => item.dictId === row.dictId);
+          if (hit) definitions = JSON.parse(hit.defs) as GlossaryItem[];
+        }
+        resolved.push({ ...row, defs: JSON.stringify(definitions) });
+      }
+      resolved.sort((a, b) => (rank.get(a.dictId) ?? 0) - (rank.get(b.dictId) ?? 0) || b.score - a.score);
+      return resolved.slice(0, 80).map((row) => ({
+        term: row.term, reading: row.reading, tags: row.tags, score: row.score,
+        definitions: JSON.parse(row.defs) as GlossaryItem[],
+        dictionary: titles.get(row.dictId) ?? "",
+      }));
+    },
+
+    async setEnabled(id: string, enabled: boolean): Promise<void> {
+      const dict = (await list()).find((item) => item.id === id);
+      if (dict?.parser) await putDict({ ...dict, enabled });
+    },
+
+    async move(id: string, direction: -1 | 1): Promise<void> {
+      const sorted = (await list()).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const current = sorted.find((item) => item.id === id);
+      const index = sorted.findIndex((item) => item.id === id);
+      const neighbor = sorted[index + direction];
+      if (current && neighbor) {
+        await putDict({ ...current, order: neighbor.order });
+        await putDict({ ...neighbor, order: current.order });
+      }
+    },
+
+    async deleteDictionary(id: string): Promise<void> {
+      await call(`db:delDict:${id}`);
+    },
+
+    async clearAll(): Promise<void> {
+      await call("db:clearAll");
     },
   };
 }

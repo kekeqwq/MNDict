@@ -74,6 +74,8 @@ function mndictTrash(id, path) {
   var fm = NSFileManager.defaultManager();
   var trash = mndictArchiveDir() + "/.trash";
   fm.createDirectoryAtPathWithIntermediateDirectoriesAttributes(trash, true, null);
+  // 无文件删除接口：先截断释放空间，再移入回收目录
+  NSData.dataWithStringEncoding("", 4).writeToFileAtomically(path, true);
   fm.moveItemAtPathToPath(path, trash + "/" + id + "." + Date.now() + ".zip");
 }
 
@@ -169,6 +171,7 @@ function mndictPanelMessage(name, payload, openState) {
   if (name === "getOpenState") return openState;
   var parts = String(name).split(":");
   var command = parts[0];
+  if (command === "db") return mndictDbCommand(String(name), parts);
   if (command === "speak") return mndictSpeak(String(name));
   if (command === "getSettings") {
     return { ok: true, autoLookup: mndictAutoLookup(), autoPlay: mndictAutoPlay() };

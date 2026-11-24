@@ -5,8 +5,8 @@ import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } fr
 import { Glossary } from "./glossary";
 import { scopeDictionaryCss } from "./yomitan";
 
-const library = createDictionaryStore();
 const host = typeof mn === "undefined" ? undefined : mn;
+const library = createDictionaryStore(host);
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const settingsEvent = "mn:mndict-open";
 
@@ -115,8 +115,12 @@ export function App() {
                 (done, total) => setProgress({ done, total }), archive.id);
               appendLog(`重建完成：${item.title}（${item.count.toLocaleString()} 条）`);
             } catch (error) {
-              appendLog(`备份数据无效：${errorText(error)}，移入回收目录`);
-              await dropArchive(host, archive.id).catch(() => {});
+              const detail = errorText(error);
+              appendLog(`重建失败：${detail}`);
+              if (/JSON|格式|index\.json|Yomitan|词条|Local file header|header/i.test(detail)) {
+                await dropArchive(host, archive.id).catch(() => {});
+                appendLog("备份已损坏，移入回收目录");
+              }
             }
           } catch (error) {
             appendLog(`读取备份失败：${errorText(error)}`);

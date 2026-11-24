@@ -1,10 +1,85 @@
-import "fake-indexeddb/auto";
-import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
+import { base64ToUtf8 } from "../src/codec";
 import { createDictionaryStore, PARSER_VERSION, searchKeys } from "../src/dictionary";
 import { definitionText, scopeDictionaryCss } from "../src/yomitan";
+import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 
 function ok(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`断言失败：${message}`);
+}
+
+interface Row { dictId: string; key: string; term: string; reading: string; tags: string; score: number; defs: string }
+
+// 内存实现 native/NativeDb.js 的 db:* 命令语义
+function mockNative() {
+  const dicts = new Map<string, Record<string, unknown>>();
+  const terms: Row[] = [];
+  const staging = new Map<string, string>();
+  const host = {
+    async call(name: string): Promise<unknown> {
+      const text = String(name);
+      const parts = text.split(":");
+      if (parts[0] !== "db") return { ok: false };
+      const op = parts[1];
+      if (op === "init") return { ok: true };
+      if (op === "list") {
+        const rows = [...dicts.values()].sort((a, b) => (a.ord as number) - (b.ord as number));
+        return { ok: true, dictionaries: rows };
+      }
+      if (op === "putDict") {
+        const row = JSON.parse(base64ToUtf8(text.slice("db:putDict:".length))) as Record<string, unknown>;
+        dicts.set(row.id as string, row);
+        return { ok: true };
+      }
+      if (op === "delDict") {
+        const id = parts[2] as string;
+        dicts.delete(id);
+        for (let i = terms.length - 1; i >= 0; i -= 1) if (terms[i]?.dictId === id) terms.splice(i, 1);
+        return { ok: true };
+      }
+      if (op === "clearAll") {
+        dicts.clear();
+        terms.length = 0;
+        return { ok: true };
+      }
+      if (op === "lookup") {
+        const keys = JSON.parse(base64ToUtf8(text.slice("db:lookup:".length))) as string[];
+        return { ok: true, rows: terms.filter((row) => keys.includes(row.key)).sort((a, b) => b.score - a.score).slice(0, 400) };
+      }
+      if (op === "stageBegin") {
+        staging.set(parts[2] as string, "");
+        return { ok: true };
+      }
+      if (op === "stageChunk") {
+        const file = parts[2] as string;
+        const expected = Number(parts[3]);
+        const binary = atob(text.slice(`db:stageChunk:${file}:${expected}:`.length));
+        if (binary.length !== expected) return { ok: false, wrote: 0 };
+        staging.set(file, (staging.get(file) ?? "") + binary);
+        return { ok: true, wrote: expected };
+      }
+      if (op === "stageDrop") {
+        staging.delete(parts[2] as string);
+        return { ok: true };
+      }
+      if (op === "importTerms") {
+        const dictId = parts[2] as string;
+        const file = parts[3] as string;
+        const binary = staging.get(file) ?? "";
+        staging.delete(file);
+        const content = new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+        let count = 0;
+        for (const line of content.split("\n")) {
+          if (!line) continue;
+          const row = JSON.parse(line) as [string, string, string, string, number, string];
+          terms.push({ dictId, key: row[0], term: row[1], reading: row[2], tags: row[3], score: row[4], defs: row[5] });
+          count += 1;
+        }
+        return { ok: true, count };
+      }
+      return { ok: false };
+    },
+  };
+  return host as unknown as Mn;
 }
 
 async function zip(files: Record<string, string>): Promise<Blob> {
@@ -31,8 +106,8 @@ async function main() {
   ok(definitionText({ type: "image", alt: "图" }) === "图", "图片回退到 alt");
   ok(new Set(searchKeys("Continuations")).has("continuation"), "英文复数词形还原");
 
-  const dbName = `test-${Date.now()}`;
-  const library = createDictionaryStore(dbName);
+  const host = mockNative();
+  const library = createDictionaryStore(host);
   const progress: [number, number][] = [];
   const logs: string[] = [];
   const dict = await library.importZip(await zip({
@@ -41,10 +116,11 @@ async function main() {
     "term_bank_1.json": JSON.stringify([...bank, ...bankWithRedirect] as unknown[]),
     "term_bank_2.json": JSON.stringify(secondBank),
   }), (message) => logs.push(message), (done, total) => progress.push([done, total]), "arc-test");
-  ok(dict.ready && dict.count === 5, "导入词条数");
+  ok(dict.count === 5, "导入词条数");
   ok(dict.archiveId === "arc-test", "备份 id 透传");
+  ok(dict.parser === PARSER_VERSION, "解析器版本标记");
   ok((dict.css ?? "").includes(".headword") && !(dict.css ?? "").includes("url("), "词典 CSS 提取并清洗");
-  ok(progress.length === 3 && progress.at(-1)?.[0] === 2, "导入进度回调");
+  ok(progress.length === 2 && progress.at(-1)?.[0] === 2, "导入进度回调");
   ok(logs.some((line) => line.includes("导入完成")) && logs.some((line) => line.includes("解析")), "导入日志");
   ok((await library.list()).length === 1, "词典列表");
 
@@ -56,7 +132,6 @@ async function main() {
   const scoped = scopeDictionaryCss("/* c */ :root{--x:red}.a{color:red}@media print{.b{color:blue}}");
   ok(scoped.includes(".glossary{--x:red}") && scoped.includes(".glossary .a{color:red}"), "词典 CSS 作用域化");
   ok(scoped.includes("@media print{.glossary .b"), "媒体查询内作用域化");
-  ok(dict.parser === PARSER_VERSION, "解析器版本标记");
 
   await library.setEnabled(dict.id, false);
   ok((await library.search("run")).length === 0, "停用后查不到");
@@ -91,8 +166,8 @@ async function main() {
   ok((await library.list()).map((item) => item.title).join(",") === "Other", "删除词典");
   ok((await library.search("run")).length === 0, "词条级联删除");
 
-  // IndexedDB 重新打开后仍在（模拟面板关闭/重启）
-  const reopened = createDictionaryStore(dbName);
+  // 原生存储即持久存储：新实例读同一份数据
+  const reopened = createDictionaryStore(host);
   ok((await reopened.list()).map((item) => item.title).join(",") === "Other", "重新打开后词条仍在");
   ok((await reopened.search("hello"))[0]?.term === "hello", "重新打开后可查询");
   await reopened.clearAll();
