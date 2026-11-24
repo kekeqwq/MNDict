@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 import { createDictionaryStore, searchKeys } from "../src/dictionary";
-import { definitionText } from "../src/yomitan";
+import { definitionText, scopeDictionaryCss } from "../src/yomitan";
 
 function ok(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`断言失败：${message}`);
@@ -20,6 +20,10 @@ const bank = [
   ["run", "run", "verb", "", 20, ["跑步", [{ tag: "div", content: "移动" }]], 2, "common"],
 ];
 const secondBank = [["hello", "hello", "interj", "", 10, ["你好"], 3, "common"]];
+const bankWithRedirect = [
+  ["redirectme", "redirectme", "", "", 0, [["targetx", ["redirect"]]], 5, ""],
+  ["targetx", "targetx", "", "", 0, ["目标释义"], 6, ""],
+];
 
 async function main() {
   // 格式解析
@@ -33,18 +37,23 @@ async function main() {
   const logs: string[] = [];
   const dict = await library.importZip(await zip({
     "index.json": JSON.stringify({ title: "Test Dict", revision: "r1", format: 3, sourceLanguage: "en" }),
-    "term_bank_1.json": JSON.stringify(bank),
+    "styles.css": ".headword{color:#333;background:url(https://evil.example/x.png)}@import url(https://evil.example/y.css);",
+    "term_bank_1.json": JSON.stringify([...bank, ...bankWithRedirect] as unknown[]),
     "term_bank_2.json": JSON.stringify(secondBank),
   }), (message) => logs.push(message), (done, total) => progress.push([done, total]), "arc-test");
-  ok(dict.ready && dict.count === 3, "导入词条数");
+  ok(dict.ready && dict.count === 5, "导入词条数");
   ok(dict.archiveId === "arc-test", "备份 id 透传");
+  ok((dict.css ?? "").includes(".headword") && !(dict.css ?? "").includes("url("), "词典 CSS 提取并清洗");
   ok(progress.length === 3 && progress.at(-1)?.[0] === 2, "导入进度回调");
   ok(logs.some((line) => line.includes("导入完成")) && logs.some((line) => line.includes("解析")), "导入日志");
   ok((await library.list()).length === 1, "词典列表");
 
   const matches = await library.search("Continuations");
   ok(matches.some((entry) => entry.term === "continuation" && entry.dictionary === "Test Dict"), "按词形查到词条");
-  ok((await library.search("run"))[0]?.definitions[0] === "跑步", "结构化释义转文本");
+  ok((await library.search("run"))[0]?.definitions[0] === "跑步", "结构化释义保留原始结构");
+  ok(typeof (await library.search("run"))[0]?.definitions[1] === "object", "结构化内容不摊平");
+  ok((await library.search("redirectme"))[0]?.definitions[0] === "目标释义", "跳转词条解析");
+  ok(scopeDictionaryCss(".a{color:red}@media print{.b{color:blue}}").startsWith(".glossary .a"), "词典 CSS 作用域化");
 
   await library.setEnabled(dict.id, false);
   ok((await library.search("run")).length === 0, "停用后查不到");

@@ -1,4 +1,5 @@
 var MNDICT_AUTO_KEY = "io.github.kekeqwq.mndict.lookupSelection";
+var MNDICT_AUTO_PLAY_KEY = "io.github.kekeqwq.mndict.lookupAutoPlay";
 
 // mn.call 的 payload 跨 JSB 后不可靠，命令参数一律编码进 name，返回值走 JSON。
 function mndictBool(value) {
@@ -24,6 +25,11 @@ function mndictBool(value) {
 function mndictAutoLookup() {
   var prefs = NSUserDefaults.standardUserDefaults();
   return prefs.boolForKey(MNDICT_AUTO_KEY) || mndictBool(prefs.objectForKey(MNDICT_AUTO_KEY));
+}
+
+function mndictAutoPlay() {
+  var prefs = NSUserDefaults.standardUserDefaults();
+  return prefs.boolForKey(MNDICT_AUTO_PLAY_KEY) || mndictBool(prefs.objectForKey(MNDICT_AUTO_PLAY_KEY));
 }
 
 function mndictArchiveDir() {
@@ -116,7 +122,7 @@ function mndictPanelMessage(name, payload, openState) {
   var parts = String(name).split(":");
   var command = parts[0];
   if (command === "getSettings") {
-    return { ok: true, autoLookup: mndictAutoLookup() };
+    return { ok: true, autoLookup: mndictAutoLookup(), autoPlay: mndictAutoPlay() };
   }
   if (command === "enableAutoLookup" || command === "disableAutoLookup") {
     var value = command === "enableAutoLookup";
@@ -124,6 +130,13 @@ function mndictPanelMessage(name, payload, openState) {
     prefs.setBoolForKey(value, MNDICT_AUTO_KEY);
     prefs.setObjectForKey(value, MNDICT_AUTO_KEY);
     return { ok: true, autoLookup: mndictAutoLookup() };
+  }
+  if (command === "enableAutoPlay" || command === "disableAutoPlay") {
+    var play = command === "enableAutoPlay";
+    var playPrefs = NSUserDefaults.standardUserDefaults();
+    playPrefs.setBoolForKey(play, MNDICT_AUTO_PLAY_KEY);
+    playPrefs.setObjectForKey(play, MNDICT_AUTO_PLAY_KEY);
+    return { ok: true, autoPlay: mndictAutoPlay() };
   }
   if (command === "archiveList") return mndictArchiveList();
   if (command === "archivePutBegin") {

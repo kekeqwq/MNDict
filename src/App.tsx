@@ -1,23 +1,40 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, type Dictionary, type Match } from "./dictionary";
+import { Glossary } from "./glossary";
+import { scopeDictionaryCss } from "./yomitan";
 
 const library = createDictionaryStore();
 const host = typeof mn === "undefined" ? undefined : mn;
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const settingsEvent = "mn:mndict-open";
 
-interface SettingsResponse { ok: boolean; autoLookup?: boolean; got?: string; keys?: string }
+interface SettingsResponse { ok: boolean; autoLookup?: boolean; autoPlay?: boolean; got?: string; keys?: string }
 
-function Results({ state }: { state: { query: string; matches: Match[]; error?: string } | null }) {
+interface QueryResult { query: string; matches: Match[]; error?: string }
+
+function AudioButtons({ match }: { match: Match }) {
+  const japanese = isJapanese(match.term + match.reading);
+  return <span className="audio">
+    <button type="button" aria-label="播放发音" onClick={() => void playAudio(match.term, match.reading, 2)}>🔊</button>
+    {japanese ? null : <button type="button" aria-label="英式发音" onClick={() => void playAudio(match.term, match.reading, 1)}>英</button>}
+  </span>;
+}
+
+function Results({ state, css }: { state: QueryResult | null; css: string }) {
   if (!state) return null;
   return <section aria-label="释义" aria-live="polite" className="results">
+    {css ? <style>{css}</style> : null}
     <h2>{state.query}</h2>
     {state.error ? <p role="alert">{state.error}</p> : !state.matches.length ? <p>启用的词典里没有找到这个词。</p> : null}
     {state.matches.map((match, index) => <article key={index}>
-      <header><strong>{match.term}</strong>{match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}</header>
+      <header><strong>{match.term}</strong>
+        {match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}
+        <AudioButtons match={match} />
+      </header>
       <small>{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}</small>
-      {match.definitions.length ? <ul>{match.definitions.map((definition, i) => <li key={i}>{definition}</li>)}</ul> : <p>这条释义没有可显示的文本。</p>}
+      {match.definitions.length ? <Glossary items={match.definitions} /> : <p>这条释义没有可显示的文本。</p>}
     </article>)}
   </section>;
 }
@@ -26,8 +43,9 @@ export function App() {
   const [mode, setMode] = useState(() => host?.currentMode ?? "workspace");
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [autoLookup, setAutoLookup] = useState<boolean | null>(null);
+  const [autoPlay, setAutoPlay] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
-  const [result, setResult] = useState<{ query: string; matches: Match[]; error?: string } | null>(null);
+  const [result, setResult] = useState<QueryResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -36,6 +54,8 @@ export function App() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const lookupVersion = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const dictCss = useMemo(() => dictionaries.filter((dict) => dict.enabled && dict.css)
+    .map((dict) => scopeDictionaryCss(dict.css ?? "")).join("\n"), [dictionaries]);
 
   async function search(text: string) {
     const normalized = text.trim();
@@ -69,7 +89,9 @@ export function App() {
       .catch((error: unknown) => { if (active) setStorageError(`无法打开插件词典存储：${errorText(error)}`); });
     if (host && __MN_NATIVE_BRIDGE__) {
       host.call<SettingsResponse>("getSettings").then((response) => {
-        if (active && response?.ok && typeof response.autoLookup === "boolean") setAutoLookup(response.autoLookup);
+        if (!active || !response?.ok) return;
+        if (typeof response.autoLookup === "boolean") setAutoLookup(response.autoLookup);
+        if (typeof response.autoPlay === "boolean") setAutoPlay(response.autoPlay);
       }).catch(() => {});
       host.call<unknown>("getOpenState").then((state) => { if (active) applyOpen(state); }).catch(() => {});
       void update(async () => {
@@ -103,8 +125,14 @@ export function App() {
 
   useEffect(() => {
     if (!host) return;
-    host.size(mode === "workspace" ? 420 : 355, mode === "workspace" ? 520 : 240);
+    host.size(mode === "workspace" ? 480 : 420, mode === "workspace" ? 640 : 420);
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "mini" || !autoPlay || !result?.matches.length) return;
+    const first = result.matches[0] as Match;
+    void playAudio(first.term, first.reading, 2);
+  }, [result, autoPlay, mode]);
 
   useEffect(() => { host?.fit(); }, [mode, dictionaries, progress, result, message, pendingDelete, storageError, log]);
 
@@ -138,6 +166,17 @@ export function App() {
     });
   }
 
+  async function changeAutoPlay(enabled: boolean) {
+    if (!host) return;
+    await update(async () => {
+      const response = await host.call<SettingsResponse>(enabled ? "enableAutoPlay" : "disableAutoPlay");
+      if (!response?.ok || response.autoPlay !== enabled) {
+        throw new Error(`无法保存发音设置：${JSON.stringify(response)}`);
+      }
+      setAutoPlay(enabled);
+    });
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void search(query);
@@ -145,7 +184,7 @@ export function App() {
 
   if (mode === "mini") return <main className="popup">
     <header className="top"><span>MNDict</span><button type="button" onClick={() => host?.close()}>关闭</button></header>
-    {result ? <Results state={result} /> : <p role="status">正在查词…</p>}
+    {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 
   return <main className="settings">
@@ -156,6 +195,8 @@ export function App() {
       <label className="switch"><input type="checkbox" checked={autoLookup ?? false} disabled={busy || autoLookup === null}
         onChange={(event) => void changeAutoLookup(event.currentTarget.checked)} /> PDF 划词后自动显示释义</label>
       {autoLookup === null ? <small>需要在 MarginNote 中打开此设置。</small> : <small>不创建摘录，不修改原文档。</small>}
+      <label className="switch"><input type="checkbox" checked={autoPlay ?? false} disabled={busy || autoPlay === null}
+        onChange={(event) => void changeAutoPlay(event.currentTarget.checked)} /> 查词后自动发音</label>
     </section>
     <section className="group" aria-labelledby="dict-label">
       <div className="top"><h2 id="dict-label">词典</h2>
@@ -202,7 +243,7 @@ export function App() {
     <section className="group"><h2>试查</h2>
       <form className="search" onSubmit={submit}><input aria-label="输入单词" placeholder="输入单词" maxLength={120} value={query} onChange={(event) => setQuery(event.currentTarget.value)} />
         <button type="submit" disabled={busy || !query.trim() || !!storageError}>查询</button></form>
-      <Results state={result} />
+      <Results state={result} css={dictCss} />
     </section>
   </main>;
 }

@@ -29,8 +29,8 @@ function mndictShow(ctx, mode, text) {
       app.showHUD("MNDict：面板创建失败（模板白名单？）", ctx.window, 4);
       return;
     }
-    panel.panelWidth = mode === "workspace" ? 420 : 355;
-    panel.maxContentHeight = mode === "workspace" ? 680 : 350;
+    panel.panelWidth = mode === "workspace" ? 480 : 420;
+    panel.maxContentHeight = mode === "workspace" ? 760 : 560;
     panel.onMessage = function (name, payload) {
       if (name === "__closed__") {
         if (ctx.panel === panel) {

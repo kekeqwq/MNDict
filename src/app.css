@@ -31,3 +31,12 @@ input { accent-color: #6d55bd; }
 .results ul { white-space: pre-wrap; padding-inline-start: 20px; }
 progress { max-width: 100%; }
 .log { font: 12px/1.6 ui-monospace, SFMono-Regular, monospace; max-height: 128px; overflow: auto; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, CanvasText 7%, transparent); overflow-wrap: anywhere; }
+.results header { display: flex; gap: 8px; align-items: baseline; }
+.audio { display: inline-flex; gap: 4px; margin-inline-start: auto; }
+.audio button { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.glossary { overflow-wrap: anywhere; }
+.glossary p, .glossary ol, .glossary ul { margin: 2px 0; }
+.glossary li { margin: 2px 0; }
+.glossary table { border-collapse: collapse; }
+.glossary rt { font-size: 0.72em; }
+.glossary .mn-def { margin: 2px 0; }

@@ -1,6 +1,6 @@
 import { openDB, type DBSchema } from "idb";
 import lemmatizer from "wink-lemmatizer";
-import { readDictionary, type DictionaryInfo, type Entry } from "./yomitan";
+import { readDictionary, redirectTarget, type DictionaryInfo, type Entry, type GlossaryItem } from "./yomitan";
 
 export interface Dictionary extends DictionaryInfo {
   id: string;
@@ -133,7 +133,15 @@ export function createDictionaryStore(name = "io.github.kekeqwq.mndict.library")
       const index = (await db()).transaction("terms").store.index("lookup");
       const matches = await Promise.all(keys.map((key) => Promise.all(dictionaries.map(async (dict) => {
         const entries = await index.getAll([dict.id, key], 50);
-        return entries.sort((a, b) => b.score - a.score).slice(0, 12).map((entry) => ({ ...entry, dictionary: dict.title }));
+        return Promise.all(entries.sort((a, b) => b.score - a.score).slice(0, 12).map(async (entry) => {
+          let definitions: GlossaryItem[] = entry.definitions;
+          const target = definitions.length === 1 ? redirectTarget(definitions[0] as GlossaryItem) : undefined;
+          if (target) {
+            const resolved = await index.getAll([dict.id, normalize(target)], 3);
+            if (resolved[0]) definitions = resolved[0].definitions;
+          }
+          return { ...entry, definitions, dictionary: dict.title };
+        }));
       }))));
       return matches.flat(2).slice(0, 80);
     },
