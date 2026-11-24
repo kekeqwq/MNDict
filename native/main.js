@@ -105,7 +105,7 @@ function mndictShow(ctx, mode, text) {
   ctx.panel.post("mndict-open", ctx.openState);
 }
 
-// 反射调用必须零参数 + respondsToSelector 守卫：ObjC 异常 JS 层接不住，参数类型错会直接闪退。
+// 反射调用防护：先 respondsToSelector，带参调用只传真实对象。ObjC 异常 JS 接不住，宁可不调不能乱调。
 function mndictPerformSafe(target, selector) {
   try {
     if (!target || !target.respondsToSelector || !target.respondsToSelector(selector)) {
@@ -121,6 +121,32 @@ function mndictPerformSafe(target, selector) {
   }
 }
 
+function mndictPerformWithSafe(target, selector, arg) {
+  try {
+    if (!target || !target.respondsToSelector || !target.respondsToSelector(selector) || !arg) {
+      mndictLog("askAI skip " + selector + " (不支持或无参数)");
+      return false;
+    }
+    target.performSelectorWithObject(selector, arg);
+    mndictLog("askAI called " + selector);
+    return true;
+  } catch (error) {
+    mndictLog("askAI " + selector + " error=" + error);
+    return false;
+  }
+}
+
+function mndictChatVisible(controller) {
+  try {
+    var visible = controller.performSelector("isAIChatVisible");
+    mndictLog("askAI visible=" + String(visible));
+    return String(visible) === "true" || String(visible) === "1";
+  } catch (error) {
+    mndictLog("askAI visible 查询失败=" + error);
+    return false;
+  }
+}
+
 function mndictAskAI(ctx) {
   try {
     var controller = Application.sharedInstance().studyController(ctx.window);
@@ -128,13 +154,22 @@ function mndictAskAI(ctx) {
     var word = doc && doc.selectionText ? String(doc.selectionText).trim() : "";
     if (!word) return { ok: false, detail: "没有选区" };
     mndictLog("askAI word=" + word.substring(0, 40));
-    var sequence = ["installImmersiveAI", "mn_addSelectionToVisibleChat", "ensureInlineChatVisible"];
-    for (var i = 0; i < sequence.length; i++) mndictPerformSafe(controller, sequence[i]);
+    // 首选：给真实的聊天按钮发 touchUpInside，走 MN 自己的按钮动作，选区由原生自动带入
     try {
-      mndictLog("askAI visible=" + String(controller.performSelector("isAIChatVisible")));
+      var btn = controller && controller.respondsToSelector && controller.respondsToSelector("chatBtn")
+        ? controller.performSelector("chatBtn") : null;
+      if (btn && btn.respondsToSelector && btn.respondsToSelector("sendActionsForControlEvents:")) {
+        btn.sendActionsForControlEvents(64); // UIControlEvents.touchUpInside
+        mndictLog("askAI chatBtn 触发");
+      } else {
+        mndictLog("askAI chatBtn 不可用");
+      }
     } catch (error) {
-      mndictLog("askAI visible 查询失败=" + error);
+      mndictLog("askAI chatBtn error=" + error);
     }
+    if (!mndictChatVisible(controller)) mndictPerformSafe(controller, "installImmersiveAI");
+    if (!mndictChatVisible(controller)) mndictPerformWithSafe(controller, "embedImmersiveAIChat:", controller);
+    if (!mndictChatVisible(controller)) mndictPerformWithSafe(controller, "openAiChat:", controller);
     mndictClose(ctx);
     return { ok: true };
   } catch (error) {
