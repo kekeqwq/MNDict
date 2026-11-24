@@ -44,24 +44,29 @@ function mndictWatchOutside(ctx) {
   } catch (error) {
     mndictLog("watchOutside error=" + error);
   }
-  // 冻结宿主的轻点类识别器（仅 tap 系，不影响滚动/缩放），关卡时恢复
+  // 冻结窗口视图树上所有轻点类识别器（含系统私有视图的，如弹出层点击关闭），关卡时恢复
   ctx.disabledRecognizers = [];
-  var hosts = [view, controller && controller.view, ctx.window];
-  for (var h = 0; h < hosts.length; h++) {
-    var recs = hosts[h] && hosts[h].gestureRecognizers ? hosts[h].gestureRecognizers : [];
-    for (var r = 0; r < recs.length; r++) {
-      var rec = recs[r];
-      try {
-        if (rec && rec.numberOfTapsRequired !== undefined && rec.enabled && rec !== tap) {
-          rec.enabled = false;
-          ctx.disabledRecognizers.push(rec);
-        }
-      } catch (freezeError) {
-        mndictLog("watchOutside freeze error=" + freezeError);
+  mndictFreezeTaps(ctx.window, tap, ctx.disabledRecognizers, 0);
+  mndictLog("watchOutside 冻结宿主轻点识别器 " + ctx.disabledRecognizers.length + " 个");
+}
+
+// 递归冻结窗口树上的轻点类识别器（只动 tap 系，滚动/缩放不受影响）
+function mndictFreezeTaps(root, skip, out, depth) {
+  if (!root || depth > 24 || out.length > 64) return;
+  try {
+    var recs = root.gestureRecognizers || [];
+    for (var i = 0; i < recs.length; i++) {
+      var rec = recs[i];
+      if (rec && rec !== skip && rec.enabled && rec.numberOfTapsRequired !== undefined) {
+        rec.enabled = false;
+        out.push(rec);
       }
     }
+    var children = root.subviews || [];
+    for (var j = 0; j < children.length; j++) mndictFreezeTaps(children[j], skip, out, depth + 1);
+  } catch (error) {
+    // 单个视图失败不影响整体
   }
-  mndictLog("watchOutside 冻结宿主轻点识别器 " + ctx.disabledRecognizers.length + " 个");
 }
 
 function mndictUnwatchOutside(ctx) {
