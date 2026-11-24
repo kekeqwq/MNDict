@@ -12,7 +12,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "check": "eslint . --max-warnings=0 && tsc --noEmit",
-    "test": "tsx test/dictionary.test.ts && tsx test/archive.test.ts"
+    "test": "tsx test/dictionary.test.ts && tsx test/archive.test.ts && tsx test/theme.test.ts"
   },
   "dependencies": {
     "@zip.js/zip.js": "^2.25.0",

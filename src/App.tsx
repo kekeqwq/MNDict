@@ -3,6 +3,7 @@ import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } from "./dictionary";
 import { Glossary } from "./glossary";
+import { resolvePalette } from "./theme";
 import { scopeDictionaryCss } from "./yomitan";
 
 const host = typeof mn === "undefined" ? undefined : mn;
@@ -52,6 +53,7 @@ function Results({ state, css }: { state: QueryResult | null; css: string }) {
 export function App() {
   const [mode, setMode] = useState<"workspace" | "mini" | null>(
     () => (host && __MN_NATIVE_BRIDGE__) ? null : "workspace");
+  const [palette, setPalette] = useState(() => resolvePalette(undefined, host?.theme));
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [autoLookup, setAutoLookup] = useState<boolean | null>(null);
   const [autoPlay, setAutoPlay] = useState<boolean | null>(null);
@@ -85,8 +87,9 @@ export function App() {
   useEffect(() => {
     let active = true;
     function applyOpen(data: unknown) {
-      const open = data as { mode?: unknown; text?: unknown } | null;
+      const open = data as { mode?: unknown; text?: unknown; theme?: unknown } | null;
       if (open?.mode !== "mini" && open?.mode !== "workspace") return;
+      setPalette(resolvePalette(open.theme, host?.theme));
       setMode(open.mode);
       if (open.mode === "workspace") host?.size(480, 640); // 迷你查词卡尺寸由原生固定定位决定，不覆盖
       if (open.mode === "mini" && typeof open.text === "string") {
@@ -242,14 +245,14 @@ export function App() {
   }
 
   // 模式未定时渲染空白，避免设置界面在查词时闪现
-  if (mode === null) return <main className="popup" aria-busy="true" />;
+  if (mode === null) return <main className="popup" data-palette={palette} aria-busy="true" />;
 
-  if (mode === "mini") return <main className="popup">
+  if (mode === "mini") return <main className="popup" data-palette={palette}>
     <div className="drag-title" aria-hidden="true">MNDict</div>
     {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 
-  return <main className="settings">
+  return <main className="settings" data-palette={palette}>
     <header className="top"><div><h1>MNDict 设置</h1><p>MarginNote PDF · 本地离线词典</p></div>
       {host ? <button type="button" onClick={() => host.close()}>关闭</button> : null}</header>
     <section className="group">

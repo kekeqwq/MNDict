@@ -69,8 +69,9 @@ function mndictShow(ctx, mode, text) {
     return;
   }
   if (ctx.panel && ctx.settingsVisible !== (mode === "workspace")) mndictClose(ctx);
-  ctx.openState = { mode: mode, text: text };
-  mndictLog("show mode=" + mode);
+  var theme = app.currentTheme;
+  ctx.openState = { mode: mode, text: text, theme: theme == null ? null : String(theme) };
+  mndictLog("show mode=" + mode + " theme=" + ctx.openState.theme);
   if (!ctx.panel) {
     var panel = AddonWebPanel.panel();
     if (!panel) {
