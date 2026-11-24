@@ -36,6 +36,7 @@ const NATIVE_GLOBALS = [
   "NSData",
   "SpeechManager",
   "UITapGestureRecognizer",
+  "UIColor",
   "mndictAutoLookup",
   "mndictPanelMessage",
   "mndictPageContext",

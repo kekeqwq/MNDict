@@ -63,6 +63,19 @@ function mndictClose(ctx) {
 }
 
 // PDF 文字层上下文提取在 native/PageContext.js
+// 玻璃底：清掉面板视图树的不透明背景，页面的 backdrop-filter 才能模糊到卡片后面的 PDF
+function mndictMakeGlass(view, depth) {
+  if (!view || depth > 5) return;
+  try {
+    if (view.setBackgroundColor) view.backgroundColor = UIColor.clearColor();
+    if (view.setOpaque) view.opaque = false;
+  } catch (bgError) {
+    // 单个视图失败不影响整体
+  }
+  var subs = view.subviews || [];
+  for (var i = 0; i < subs.length; i++) mndictMakeGlass(subs[i], depth + 1);
+}
+
 function mndictShow(ctx, mode, text, pageText) {
   var app = Application.sharedInstance();
   var controller = app.studyController(ctx.window);
@@ -105,6 +118,7 @@ function mndictShow(ctx, mode, text, pageText) {
   if (mode === "mini") mndictWatchOutside(ctx);
   else mndictUnwatchOutside(ctx);
   ctx.panel.showFloatingIn(controller);
+  mndictMakeGlass(ctx.panel.view, 0);
   // 查词卡固定在屏幕下部左侧：黑色工具条所在的中带之下，内容随 fit 向下生长
   if (mode === "mini") {
     try {
