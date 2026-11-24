@@ -113,6 +113,17 @@ function mndictAskAI(ctx) {
     var word = doc && doc.selectionText ? String(doc.selectionText).trim() : "";
     if (!word) return { ok: false, detail: "没有选区" };
     mndictLog("askAI word=" + word.substring(0, 40));
+    // 对齐 MN 菜单自身的 Ask AI 流程：先把当前选区数据交给 pending，再开对话框
+    try {
+      var data = controller.performSelector("currentBookSelectionDataForAIChat");
+      mndictLog("askAI selectionData=" + (data ? "有" : "无"));
+      if (data) {
+        controller.performSelectorWithObject("setPendingAISelectionData:", data);
+        mndictLog("askAI pending 已设置");
+      }
+    } catch (error) {
+      mndictLog("askAI selectionData error=" + error);
+    }
     var names = ["chatBtn", "inlineChatBtn"];
     var tapped = false;
     for (var i = 0; i < names.length && !tapped; i++) {
