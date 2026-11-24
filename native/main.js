@@ -135,8 +135,31 @@ JSB.newAddon = function () {
         self.panel.showFloatingIn(controller);
       }
     },
-    onOutsideTap: function () {
+    onOutsideTap: function (sender) {
       var closing = Boolean(self.panel && !self.settingsVisible);
+      try {
+        var probeController = Application.sharedInstance().studyController(self.window);
+        var probeDoc = probeController && probeController.readerController && probeController.readerController.currentDocumentController;
+        var probeView = probeDoc && probeDoc.view;
+        var point = sender && sender.locationInView ? sender.locationInView(probeView) : null;
+        var pageNo = probeDoc ? probeDoc.currPageNo : -1;
+        mndictLog("probe tap=" + (point ? Math.round(point.x) + "," + Math.round(point.y) : "?") +
+          " page=" + pageNo + " bounds=" + (probeView ? Math.round(probeView.bounds.width) + "x" + Math.round(probeView.bounds.height) : "?"));
+        var contents = Document.textContentsForPageNo(pageNo);
+        mndictLog("probe contents count=" + (contents ? contents.length : -1));
+        if (contents && contents.length) {
+          for (var i = 0; i < Math.min(2, contents.length); i++) {
+            var item = contents[i];
+            var keys = [];
+            for (var key in item) keys.push(key);
+            mndictLog("probe item" + i + " keys=[" + keys.join(",") + "] json=" + String(JSON.stringify(item)).substring(0, 300));
+          }
+        }
+        var pageText = Document.pageTextForPageNo(pageNo);
+        mndictLog("probe text head=" + String(pageText || "").substring(0, 80).replace(/\n/g, "\\n"));
+      } catch (error) {
+        mndictLog("probe error=" + error);
+      }
       mndictLog("outsideTap closing=" + closing);
       if (closing) mndictClose(self);
     },

@@ -35,6 +35,7 @@ const NATIVE_GLOBALS = [
   "NSData",
   "SpeechManager",
   "UITapGestureRecognizer",
+  "Document",
   "mndictAutoLookup",
   "mndictPanelMessage",
   "mndictLog",
@@ -266,7 +267,7 @@ export default tseslint.config(
       "no-console": "off",
       "no-restricted-globals": [
         "error",
-        ...BROWSER_ONLY_GLOBALS.map((name) => ({
+        ...BROWSER_ONLY_GLOBALS.filter((name) => name !== "Document").map((name) => ({
           name,
           message: "原生模块运行在 JavaScriptCore 中，没有浏览器 API。",
         })),
