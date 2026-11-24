@@ -8,7 +8,7 @@ function mndictRefreshCommands(ctx) {
   if (controller) controller.refreshAddonCommands();
 }
 
-// 迷你浮层：轻点文档区即关闭（识别器不拦截原有手势）
+// 迷你浮层：轻点文档区即关闭。禁用宿主的轻点识别器，避免这一下清掉选区/工具条。
 function mndictWatchOutside(ctx) {
   mndictUnwatchOutside(ctx);
   var controller = Application.sharedInstance().studyController(ctx.window);
@@ -36,7 +36,7 @@ function mndictWatchOutside(ctx) {
       }
     }
     if (!tap) return;
-    tap.cancelsTouchesInView = true; // 拦截这下点击：只关查词卡，保留选区与工具条；识别器卸载后下一次点击交还 MN
+    tap.cancelsTouchesInView = true;
     view.addGestureRecognizer(tap);
     ctx.outsideTap = tap;
     ctx.outsideView = view;
@@ -44,12 +44,40 @@ function mndictWatchOutside(ctx) {
   } catch (error) {
     mndictLog("watchOutside error=" + error);
   }
+  // 冻结宿主的轻点类识别器（仅 tap 系，不影响滚动/缩放），关卡时恢复
+  ctx.disabledRecognizers = [];
+  var hosts = [view, controller && controller.view, ctx.window];
+  for (var h = 0; h < hosts.length; h++) {
+    var recs = hosts[h] && hosts[h].gestureRecognizers ? hosts[h].gestureRecognizers : [];
+    for (var r = 0; r < recs.length; r++) {
+      var rec = recs[r];
+      try {
+        if (rec && rec.numberOfTapsRequired !== undefined && rec.enabled && rec !== tap) {
+          rec.enabled = false;
+          ctx.disabledRecognizers.push(rec);
+        }
+      } catch (freezeError) {
+        mndictLog("watchOutside freeze error=" + freezeError);
+      }
+    }
+  }
+  mndictLog("watchOutside 冻结宿主轻点识别器 " + ctx.disabledRecognizers.length + " 个");
 }
 
 function mndictUnwatchOutside(ctx) {
   if (ctx.outsideTap && ctx.outsideView) ctx.outsideView.removeGestureRecognizer(ctx.outsideTap);
   ctx.outsideTap = null;
   ctx.outsideView = null;
+  var recs = ctx.disabledRecognizers || [];
+  for (var i = 0; i < recs.length; i++) {
+    try {
+      recs[i].enabled = true;
+    } catch (restoreError) {
+      mndictLog("watchOutside restore error=" + restoreError);
+    }
+  }
+  if (recs.length) mndictLog("watchOutside 恢复宿主轻点识别器 " + recs.length + " 个");
+  ctx.disabledRecognizers = [];
 }
 
 function mndictClose(ctx) {
