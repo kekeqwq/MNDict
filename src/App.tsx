@@ -88,7 +88,7 @@ export function App() {
       const open = data as { mode?: unknown; text?: unknown } | null;
       if (open?.mode !== "mini" && open?.mode !== "workspace") return;
       setMode(open.mode);
-      host?.size(open.mode === "workspace" ? 480 : 420, open.mode === "workspace" ? 640 : 420);
+      if (open.mode === "workspace") host?.size(480, 640); // 迷你查词卡尺寸由原生固定定位决定，不覆盖
       if (open.mode === "mini" && typeof open.text === "string") {
         setQuery(open.text);
         void search(open.text);
@@ -185,7 +185,9 @@ export function App() {
     void playAudio(first.term, first.reading, 2);
   }, [result, autoPlay, mode]);
 
-  useEffect(() => { host?.fit(); }, [mode, dictionaries, progress, result, message, pendingDelete, storageError, log]);
+  useEffect(() => {
+    if (mode !== "mini") host?.fit(); // 迷你查词卡为固定整列尺寸，内容内部滚动
+  }, [mode, dictionaries, progress, result, message, pendingDelete, storageError, log]);
 
   function appendLog(line: string) {
     setLog((lines) => [...lines.slice(-199), line]);

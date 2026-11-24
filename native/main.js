@@ -108,11 +108,12 @@ function mndictShow(ctx, mode, text) {
       var bounds = controller.view.bounds;
       var panelView = ctx.panel.view;
       if (panelView && bounds) {
-        var y = Math.round(bounds.height * 0.44);
-        var h = Math.max(280, Math.round(bounds.height * 0.56) - 84);
-        panelView.frame = { x: 8, y: y, width: Math.round(bounds.width * 0.46), height: h };
+        // 左列整块：顶部栏下方到底部工具栏上方，横向约 42% 宽
+        var y = Math.round(bounds.height * 0.16);
+        var h = Math.round(bounds.height * 0.69);
+        panelView.frame = { x: Math.round(bounds.width * 0.02), y: y, width: Math.round(bounds.width * 0.4), height: h };
         ctx.panel.maxContentHeight = h;
-        mndictLog("show mini 定位 x=8 y=" + y + " w=" + Math.round(bounds.width * 0.46) + " h=" + h);
+        mndictLog("show mini 定位 左列 w=" + Math.round(bounds.width * 0.4) + " h=" + h);
       }
     } catch (frameError) {
       mndictLog("show frame error=" + frameError);
