@@ -199,6 +199,7 @@ export function App() {
   }
 
   if (mode === "mini") return <main className="popup">
+    <div className="drag-title" aria-hidden="true">MNDict</div>
     {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
   </main>;
 

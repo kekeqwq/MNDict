@@ -24,7 +24,8 @@ input { accent-color: #6d55bd; }
 .confirm { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .search input { background: Canvas; color: CanvasText; min-width: 0; flex: 1; }
 .popup { display: grid; gap: 6px; }
-:root[data-mode="mini"] body { padding-top: 8px; }
+:root[data-mode="mini"] body { padding-top: 4px; }
+.drag-title { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: GrayText; line-height: 28px; user-select: none; }
 .results .meta { display: flex; align-items: center; gap: 6px; }
 .results .meta .audio { margin-inline-start: auto; }
 .results { overflow-wrap: anywhere; }

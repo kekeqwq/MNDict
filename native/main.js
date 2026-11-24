@@ -7,10 +7,31 @@ function mndictRefreshCommands(ctx) {
   if (controller) controller.refreshAddonCommands();
 }
 
+// 迷你浮层：轻点文档区即关闭（识别器不拦截原有手势）
+function mndictWatchOutside(ctx) {
+  mndictUnwatchOutside(ctx);
+  var controller = Application.sharedInstance().studyController(ctx.window);
+  var doc = controller && controller.readerController && controller.readerController.currentDocumentController;
+  var view = doc && doc.view;
+  if (!view) return;
+  var tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, "onOutsideTap:");
+  tap.cancelsTouchesInView = false;
+  view.addGestureRecognizer(tap);
+  ctx.outsideTap = tap;
+  ctx.outsideView = view;
+}
+
+function mndictUnwatchOutside(ctx) {
+  if (ctx.outsideTap && ctx.outsideView) ctx.outsideView.removeGestureRecognizer(ctx.outsideTap);
+  ctx.outsideTap = null;
+  ctx.outsideView = null;
+}
+
 function mndictClose(ctx) {
   var panel = ctx.panel;
   ctx.panel = null;
   ctx.settingsVisible = false;
+  mndictUnwatchOutside(ctx);
   if (panel) panel.hideFloating();
 }
 
@@ -50,6 +71,8 @@ function mndictShow(ctx, mode, text) {
     ctx.panel = panel;
   }
   ctx.settingsVisible = mode === "workspace";
+  if (mode === "mini") mndictWatchOutside(ctx);
+  else mndictUnwatchOutside(ctx);
   ctx.panel.showFloatingIn(controller);
   ctx.panel.post("mndict-open", ctx.openState);
 }
@@ -84,6 +107,9 @@ JSB.newAddon = function () {
       if (self.panel && controller === Application.sharedInstance().studyController(self.window)) {
         self.panel.showFloatingIn(controller);
       }
+    },
+    onOutsideTap: function () {
+      if (self.panel && !self.settingsVisible) mndictClose(self);
     },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;
