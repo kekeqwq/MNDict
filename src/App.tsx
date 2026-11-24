@@ -102,7 +102,9 @@ export function App() {
           await library.deleteDictionary(dict.id);
         }
         const archives = await listArchives(host);
-        const known = new Set((await library.list()).map((dict) => dict.archiveId).filter(Boolean));
+        const items = await library.list();
+        appendLog(`启动核对：索引 ${items.length} 部，备份 ${archives.length} 份`);
+        const known = new Set(items.map((dict) => dict.archiveId).filter(Boolean));
         for (const archive of archives) {
           if (known.has(archive.id)) continue;
           appendLog(`发现备份词典 ${archive.id}（${(archive.size / 1048576).toFixed(1)} MiB），重建索引…`);
