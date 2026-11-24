@@ -105,6 +105,22 @@ function mndictShow(ctx, mode, text) {
   ctx.panel.post("mndict-open", ctx.openState);
 }
 
+// 反射调用必须零参数 + respondsToSelector 守卫：ObjC 异常 JS 层接不住，参数类型错会直接闪退。
+function mndictPerformSafe(target, selector) {
+  try {
+    if (!target || !target.respondsToSelector || !target.respondsToSelector(selector)) {
+      mndictLog("askAI skip " + selector + " (不支持)");
+      return false;
+    }
+    target.performSelector(selector);
+    mndictLog("askAI called " + selector);
+    return true;
+  } catch (error) {
+    mndictLog("askAI " + selector + " error=" + error);
+    return false;
+  }
+}
+
 function mndictAskAI(ctx) {
   try {
     var controller = Application.sharedInstance().studyController(ctx.window);
@@ -112,16 +128,12 @@ function mndictAskAI(ctx) {
     var word = doc && doc.selectionText ? String(doc.selectionText).trim() : "";
     if (!word) return { ok: false, detail: "没有选区" };
     mndictLog("askAI word=" + word.substring(0, 40));
-    var candidates = ["embedImmersiveAIChat:", "aiChat:", "onAskAI:"];
-    for (var i = 0; i < candidates.length; i++) {
-      try {
-        controller.performSelectorWithObject(candidates[i], null);
-        var visible = controller.performSelector("isAIChatVisible");
-        mndictLog("askAI try=" + candidates[i] + " visible=" + String(visible));
-        if (String(visible) === "true" || String(visible) === "1") break;
-      } catch (error) {
-        mndictLog("askAI try=" + candidates[i] + " error=" + error);
-      }
+    var sequence = ["installImmersiveAI", "mn_addSelectionToVisibleChat", "ensureInlineChatVisible"];
+    for (var i = 0; i < sequence.length; i++) mndictPerformSafe(controller, sequence[i]);
+    try {
+      mndictLog("askAI visible=" + String(controller.performSelector("isAIChatVisible")));
+    } catch (error) {
+      mndictLog("askAI visible 查询失败=" + error);
     }
     mndictClose(ctx);
     return { ok: true };
