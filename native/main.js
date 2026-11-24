@@ -280,9 +280,13 @@ JSB.newAddon = function () {
       }
     },
     onOutsideTap: function () {
-      var closing = Boolean(self.panel && !self.settingsVisible);
-      mndictLog("outsideTap closing=" + closing);
-      if (closing) mndictClose(self);
+      // 软关闭：缩到 1x1 瞬间隐形，不触发面板关闭/焦点变化（工具条的关闭就是点空白，不能惊动它）；
+      // 同时卸载自身识别器并恢复宿主识别器，第二下点击原样交给 MN。
+      if (self.panel && !self.settingsVisible) {
+        self.panel.post("mndict-shrink", {});
+        mndictUnwatchOutside(self);
+        mndictLog("outsideTap 软关闭完成");
+      }
     },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;
