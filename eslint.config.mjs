@@ -21,6 +21,7 @@ const BROWSER_ONLY_GLOBALS = [
   "HTMLElement",
   "Node",
   "Document",
+  "NSTimer",
 ];
 
 const NATIVE_GLOBALS = [
@@ -41,6 +42,7 @@ const NATIVE_GLOBALS = [
   "mndictDbCommand",
   "SQLiteDatabase",
   "NSString",
+  "NSTimer",
   "console",
 ];
 
@@ -266,7 +268,7 @@ export default tseslint.config(
       "no-console": "off",
       "no-restricted-globals": [
         "error",
-        ...BROWSER_ONLY_GLOBALS.map((name) => ({
+        ...BROWSER_ONLY_GLOBALS.filter((name) => name !== "Document" && name !== "NSTimer").map((name) => ({
           name,
           message: "原生模块运行在 JavaScriptCore 中，没有浏览器 API。",
         })),

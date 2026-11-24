@@ -105,6 +105,50 @@ function mndictShow(ctx, mode, text) {
   ctx.panel.post("mndict-open", ctx.openState);
 }
 
+// 在聊天视图树里按标题找按钮（用于自动点掉「点击即发送」）
+function mndictFindButton(view, keyword, depth, found) {
+  if (!view || depth > 14 || found.length) return;
+  try {
+    if (view.sendActionsForControlEvents) {
+      var title = String((view.currentTitle || "") + (view.titleLabel && view.titleLabel.text ? view.titleLabel.text : ""));
+      if (title.indexOf(keyword) >= 0) {
+        found.push(view);
+        return;
+      }
+    }
+    var children = view.subviews || [];
+    for (var i = 0; i < children.length; i++) mndictFindButton(children[i], keyword, depth + 1, found);
+  } catch (error) {
+    // 单个视图读取失败不影响整体遍历
+  }
+}
+
+function mndictAutoSendStaged(controller) {
+  try {
+    var roots = [];
+    var names = ["floatingChatContainer", "floatingChatNavigation", "chatController", "innerChatController"];
+    for (var i = 0; i < names.length; i++) {
+      try {
+        var obj = controller.performSelector(names[i]);
+        if (obj) roots.push(obj.view ? obj.view : obj);
+      } catch (error) {
+        // 忽略取不到的容器
+      }
+    }
+    var found = [];
+    for (var r = 0; r < roots.length && !found.length; r++) mndictFindButton(roots[r], "即发送", 0, found);
+    for (var r2 = 0; r2 < roots.length && !found.length; r2++) mndictFindButton(roots[r2], "发送", 0, found);
+    if (found.length) {
+      found[0].sendActionsForControlEvents(64); // UIControlEvents.touchUpInside
+      mndictLog("askAI 自动发送已触发");
+    } else {
+      mndictLog("askAI 未找到发送按钮");
+    }
+  } catch (error) {
+    mndictLog("askAI autoSend error=" + error);
+  }
+}
+
 // Ask AI：只走真实按钮的 touchUpInside（sender 就是按钮，MN 自带选区语境），不做带参反射。
 function mndictAskAI(ctx) {
   try {
@@ -152,6 +196,14 @@ function mndictAskAI(ctx) {
         mndictLog("askAI addSelectionToVisibleChat 已调用");
       } catch (error) {
         mndictLog("askAI addSelection error=" + error);
+      }
+      // 等「点击即发送」芯片出现后自动点掉，省一次手动点击
+      try {
+        NSTimer.scheduledTimerWithTimeInterval(0.6, false, function () {
+          mndictAutoSendStaged(controller);
+        });
+      } catch (error) {
+        mndictLog("askAI timer error=" + error);
       }
     }
     if (!tapped) return { ok: false, detail: "找不到可用的 AI 按钮" };
