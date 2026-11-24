@@ -145,6 +145,15 @@ function mndictAskAI(ctx) {
     } catch (error) {
       mndictLog("askAI visibleNote 查询失败=" + error);
     }
+    // 对话框可见后，把当前选区推进去（零参，安全）
+    if (tapped) {
+      try {
+        controller.performSelector("mn_addSelectionToVisibleChat");
+        mndictLog("askAI addSelectionToVisibleChat 已调用");
+      } catch (error) {
+        mndictLog("askAI addSelection error=" + error);
+      }
+    }
     if (!tapped) return { ok: false, detail: "找不到可用的 AI 按钮" };
     mndictClose(ctx);
     return { ok: true };
