@@ -73,8 +73,9 @@ function mndictPanelBorder(ctx) {
       mndictLog("panelBorder 找不到带圆角的层");
       return false;
     }
-    var theme = String(Application.sharedInstance().currentTheme || "");
-    var light = theme === "White" || theme === "Sepia";
+    var theme = String(Application.sharedInstance().currentTheme || "").toLowerCase();
+    // 与页面的 resolvePalette 一致：白/棕褐/未知 → 浅色描边；灰/黑/绿 → 深色描边
+    var light = ["gray", "grey", "dark", "black", "green"].indexOf(theme) < 0;
     var color = light
       ? UIColor.colorWithRedGreenBlueAlpha(0.737, 0.753, 0.8, 1)
       : UIColor.colorWithRedGreenBlueAlpha(0.286, 0.302, 0.392, 1);
@@ -141,9 +142,9 @@ function mndictShow(ctx, mode, text, pageText) {
         // 左列整块：顶部栏下方到底部工具栏上方，横向约 42% 宽
         var y = Math.round(bounds.height * 0.16);
         var h = Math.round(bounds.height * 0.69);
-        panelView.frame = { x: Math.round(bounds.width * 0.02), y: y, width: Math.round(bounds.width * 0.4), height: h };
+        panelView.frame = { x: Math.round(bounds.width * 0.02), y: y, width: Math.round(bounds.width * 0.52), height: h };
         ctx.panel.maxContentHeight = h;
-        mndictLog("show mini 定位 左列 w=" + Math.round(bounds.width * 0.4) + " h=" + h);
+        mndictLog("show mini 定位 左列 w=" + Math.round(bounds.width * 0.52) + " h=" + h);
       }
     } catch (frameError) {
       mndictLog("show frame error=" + frameError);
