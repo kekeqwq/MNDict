@@ -38,6 +38,7 @@ const NATIVE_GLOBALS = [
   "UITapGestureRecognizer",
   "mndictAutoLookup",
   "mndictPanelMessage",
+  "mndictPageContext",
   "mndictLog",
   "mndictDbCommand",
   "SQLiteDatabase",

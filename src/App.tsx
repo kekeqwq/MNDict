@@ -3,6 +3,7 @@ import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } from "./dictionary";
 import { Glossary } from "./glossary";
+import { findPhrases, type PhraseLookup } from "./phrases";
 import { resolvePalette } from "./theme";
 import { scopeDictionaryCss } from "./yomitan";
 
@@ -34,19 +35,44 @@ async function askNativeAI() {
   }
 }
 
-function Results({ state, css }: { state: QueryResult | null; css: string }) {
+function EntryList({ matches }: { matches: Match[] }) {
+  return <>{matches.map((match, index) => <article key={index}>
+    <header><strong>{match.term}</strong>
+      {match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}
+    </header>
+    <small className="meta">{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}<AudioButtons match={match} /></small>
+    {match.definitions.length ? <Glossary items={match.definitions} /> : <p>这条释义没有可显示的文本。</p>}
+  </article>)}</>;
+}
+
+function Results({ state, css, phrases }: { state: QueryResult | null; css: string; phrases: PhraseLookup[] | null }) {
   if (!state) return null;
+  const phraseTotal = (phrases ?? []).reduce((sum, hit) => sum + hit.matches.length, 0);
   return <section aria-label="释义" aria-live="polite" className="results">
     {css ? <style>{css}</style> : null}
-    <h2 hidden={state.matches[0]?.term.toLowerCase() === state.query.toLowerCase() && !state.error}>{state.query}</h2>
-    {state.error ? <p role="alert">{state.error}</p> : !state.matches.length ? <p>启用的词典里没有找到这个词。</p> : null}
-    {state.matches.map((match, index) => <article key={index}>
-      <header><strong>{match.term}</strong>
-        {match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}
-      </header>
-      <small className="meta">{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}<AudioButtons match={match} /></small>
-      {match.definitions.length ? <Glossary items={match.definitions} /> : <p>这条释义没有可显示的文本。</p>}
-    </article>)}
+    {phrases?.length ? <>
+      <details className="result-group" open>
+        <summary><span className="marker" aria-hidden="true">▶</span>
+          <span className="group-title">单词 · {state.query}</span><span className="count">{state.matches.length}</span></summary>
+        <div className="group-body">
+          {state.error ? <p role="alert">{state.error}</p> : !state.matches.length ? <p>启用的词典里没有找到这个词。</p> : <EntryList matches={state.matches} />}
+        </div>
+      </details>
+      <details className="result-group" open>
+        <summary><span className="marker" aria-hidden="true">▶</span>
+          <span className="group-title">短语 · {phrases.map((hit) => hit.phrase).join(" / ")}</span><span className="count">{phraseTotal}</span></summary>
+        <div className="group-body">
+          {phrases.map((hit) => <div className="phrase-block" key={hit.phrase}>
+            <h3>{hit.phrase}</h3>
+            <EntryList matches={hit.matches} />
+          </div>)}
+        </div>
+      </details>
+    </> : <>
+      <h2 hidden={state.matches[0]?.term.toLowerCase() === state.query.toLowerCase() && !state.error}>{state.query}</h2>
+      {state.error ? <p role="alert">{state.error}</p> : !state.matches.length ? <p>启用的词典里没有找到这个词。</p> : null}
+      <EntryList matches={state.matches} />
+    </>}
   </section>;
 }
 
@@ -59,6 +85,7 @@ export function App() {
   const [autoPlay, setAutoPlay] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [phrases, setPhrases] = useState<PhraseLookup[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -67,6 +94,7 @@ export function App() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingClear, setPendingClear] = useState<"cache" | "all" | null>(null);
   const lookupVersion = useRef(0);
+  const phraseVersion = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const dictCss = useMemo(() => dictionaries.filter((dict) => dict.enabled && dict.css)
     .map((dict) => scopeDictionaryCss(dict.css ?? "")).join("\n"), [dictionaries]);
@@ -84,10 +112,23 @@ export function App() {
     }
   }
 
+  // 词组识别：从 PDF 文字层上下文找词典命中的多词组（Kiki 行为对齐）
+  async function searchPhrases(text: string, pageText: string) {
+    const version = ++phraseVersion.current;
+    setPhrases(null);
+    if (!pageText.trim()) return;
+    try {
+      const hits = await findPhrases(library, text, pageText);
+      if (version === phraseVersion.current) setPhrases(hits);
+    } catch {
+      // 词组识别失败不影响单词查询
+    }
+  }
+
   useEffect(() => {
     let active = true;
     function applyOpen(data: unknown) {
-      const open = data as { mode?: unknown; text?: unknown; theme?: unknown } | null;
+      const open = data as { mode?: unknown; text?: unknown; theme?: unknown; pageText?: unknown } | null;
       if (open?.mode !== "mini" && open?.mode !== "workspace") return;
       setPalette(resolvePalette(open.theme, host?.theme));
       setMode(open.mode);
@@ -95,6 +136,7 @@ export function App() {
       if (open.mode === "mini" && typeof open.text === "string") {
         setQuery(open.text);
         void search(open.text);
+        void searchPhrases(open.text, typeof open.pageText === "string" ? open.pageText : "");
       }
     }
     function onOpen(event: Event) {
@@ -249,7 +291,7 @@ export function App() {
 
   if (mode === "mini") return <main className="popup" data-palette={palette}>
     <div className="drag-title" aria-hidden="true">MNDict</div>
-    {result ? <Results state={result} css={dictCss} /> : <p role="status">正在查词…</p>}
+    {result ? <Results state={result} css={dictCss} phrases={phrases} /> : <p role="status">正在查词…</p>}
   </main>;
 
   return <main className="settings" data-palette={palette}>

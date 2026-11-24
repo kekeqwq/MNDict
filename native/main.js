@@ -1,5 +1,6 @@
 JSB.require("PanelBridge");
 JSB.require("NativeDb");
+JSB.require("PageContext");
 var SELECTION = "PopupMenuOnSelection";
 
 // JSB 实例方法按 selector 映射，带参方法不在 self 上；业务逻辑放文件级函数，显式传上下文。
@@ -61,7 +62,8 @@ function mndictClose(ctx) {
   if (panel) panel.hideFloating();
 }
 
-function mndictShow(ctx, mode, text) {
+// PDF 文字层上下文提取在 native/PageContext.js
+function mndictShow(ctx, mode, text, pageText) {
   var app = Application.sharedInstance();
   var controller = app.studyController(ctx.window);
   if (!controller) {
@@ -70,8 +72,8 @@ function mndictShow(ctx, mode, text) {
   }
   if (ctx.panel && ctx.settingsVisible !== (mode === "workspace")) mndictClose(ctx);
   var theme = app.currentTheme;
-  ctx.openState = { mode: mode, text: text, theme: theme == null ? null : String(theme) };
-  mndictLog("show mode=" + mode + " theme=" + ctx.openState.theme);
+  ctx.openState = { mode: mode, text: text, theme: theme == null ? null : String(theme), pageText: pageText || "" };
+  mndictLog("show mode=" + mode + " theme=" + ctx.openState.theme + " 上下文=" + ctx.openState.pageText.length + " 字");
   if (!ctx.panel) {
     var panel = AddonWebPanel.panel();
     if (!panel) {
@@ -270,7 +272,7 @@ JSB.newAddon = function () {
       if (typeof text !== "string") return;
       text = text.trim();
       if (!text || text.length > 120 || /[\r\n]/.test(text)) return;
-      mndictShow(self, "mini", text);
+      mndictShow(self, "mini", text, mndictPageContext(self, doc, text));
     },
     queryAddonCommandStatus: function () {
       return {
