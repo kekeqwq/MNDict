@@ -1,28 +1,85 @@
 JSB.require("PanelBridge");
 var SELECTION = "PopupMenuOnSelection";
 
+// JSB 实例方法按 selector 映射，带参方法不在 self 上；业务逻辑放文件级函数，显式传上下文。
+function mndictRefreshCommands(ctx) {
+  var controller = Application.sharedInstance().studyController(ctx.window);
+  if (controller) controller.refreshAddonCommands();
+}
+
+function mndictClose(ctx) {
+  var panel = ctx.panel;
+  ctx.panel = null;
+  ctx.settingsVisible = false;
+  if (panel) panel.hideFloating();
+}
+
+function mndictShow(ctx, mode, text) {
+  var app = Application.sharedInstance();
+  var controller = app.studyController(ctx.window);
+  if (!controller) {
+    app.showHUD("MNDict：拿不到 studyController", ctx.window, 3);
+    return;
+  }
+  if (ctx.panel && ctx.settingsVisible !== (mode === "workspace")) mndictClose(ctx);
+  ctx.openState = { mode: mode, text: text };
+  if (!ctx.panel) {
+    var panel = AddonWebPanel.panel();
+    if (!panel) {
+      app.showHUD("MNDict：面板创建失败（模板白名单？）", ctx.window, 4);
+      return;
+    }
+    panel.panelWidth = mode === "workspace" ? 420 : 355;
+    panel.maxContentHeight = mode === "workspace" ? 680 : 350;
+    panel.onMessage = function (name, payload) {
+      if (name === "__closed__") {
+        if (ctx.panel === panel) {
+          ctx.panel = null;
+          ctx.settingsVisible = false;
+          mndictRefreshCommands(ctx);
+        }
+        return { ok: true };
+      }
+      return mndictPanelMessage(name, payload, ctx.openState);
+    };
+    if (!panel.loadPanel()) {
+      panel.teardown();
+      app.showHUD("MNDict：index.html 加载失败", ctx.window, 4);
+      return;
+    }
+    ctx.panel = panel;
+    app.showHUD("MNDict：面板已创建", ctx.window, 1);
+  }
+  ctx.settingsVisible = mode === "workspace";
+  ctx.panel.showFloatingInMode(controller, mode);
+  ctx.panel.post("mndict-open", ctx.openState);
+}
+
 JSB.newAddon = function () {
   return JSB.defineClass("MNDictAddon : JSExtension", {
     sceneWillConnect: function () {
       self.panel = null;
       self.settingsVisible = false;
-      self.observeSelection();
+      if (!self.observingSelection) {
+        NSNotificationCenter.defaultCenter().addObserverSelectorName(self, "onTextSelection:", SELECTION);
+        self.observingSelection = true;
+      }
     },
     sceneDidDisconnect: function () {
-      if (self.observingSelection) NSNotificationCenter.defaultCenter().removeObserverName(self, SELECTION);
-      self.observingSelection = false;
-      self.closePanel();
+      if (self.observingSelection) {
+        NSNotificationCenter.defaultCenter().removeObserverName(self, SELECTION);
+        self.observingSelection = false;
+      }
+      mndictClose(self);
     },
     notebookWillOpen: function () {
-      self.observeSelection();
+      if (!self.observingSelection) {
+        NSNotificationCenter.defaultCenter().addObserverSelectorName(self, "onTextSelection:", SELECTION);
+        self.observingSelection = true;
+      }
     },
     notebookWillClose: function () {
-      self.closePanel();
-    },
-    observeSelection: function () {
-      if (self.observingSelection) return;
-      NSNotificationCenter.defaultCenter().addObserverSelectorName(self, "onTextSelection:", SELECTION);
-      self.observingSelection = true;
+      mndictClose(self);
     },
     onTextSelection: function (sender) {
       if (self.settingsVisible || !mndictAutoLookup()) return;
@@ -32,7 +89,7 @@ JSB.newAddon = function () {
       if (typeof text !== "string") return;
       text = text.trim();
       if (!text || text.length > 120 || /[\r\n]/.test(text)) return;
-      self.showPanel("mini", text);
+      mndictShow(self, "mini", text);
     },
     queryAddonCommandStatus: function () {
       return {
@@ -40,47 +97,13 @@ JSB.newAddon = function () {
       };
     },
     openSettings: function () {
-      if (self.settingsVisible) self.closePanel();
-      else self.showPanel("workspace", "");
-      self.refreshCommands();
-    },
-    closePanel: function () {
-      var panel = self.panel;
-      self.panel = null;
-      self.settingsVisible = false;
-      if (panel) panel.hideFloating();
-    },
-    refreshCommands: function () {
-      var controller = Application.sharedInstance().studyController(self.window);
-      if (controller) controller.refreshAddonCommands();
-    },
-    showPanel: function (mode, text) {
-      var controller = Application.sharedInstance().studyController(self.window);
-      if (!controller) return;
-      if (self.panel && self.settingsVisible !== (mode === "workspace")) self.closePanel();
-      self.openState = { mode: mode, text: text };
-      if (!self.panel) {
-        var panel = AddonWebPanel.panel();
-        if (!panel) return;
-        panel.panelWidth = mode === "workspace" ? 420 : 355;
-        panel.maxContentHeight = mode === "workspace" ? 680 : 350;
-        panel.onMessage = function (name, payload) {
-          if (name === "__closed__") {
-            if (self.panel === panel) {
-              self.panel = null;
-              self.settingsVisible = false;
-              self.refreshCommands();
-            }
-            return { ok: true };
-          }
-          return mndictPanelMessage(name, payload, self.openState);
-        };
-        if (!panel.loadPanel()) { panel.teardown(); return; }
-        self.panel = panel;
+      try {
+        if (self.settingsVisible) mndictClose(self);
+        else mndictShow(self, "workspace", "");
+        mndictRefreshCommands(self);
+      } catch (error) {
+        Application.sharedInstance().showHUD("MNDict 异常：" + error, self.window, 4);
       }
-      self.settingsVisible = mode === "workspace";
-      self.panel.showFloatingInMode(controller, mode);
-      self.panel.post("mndict-open", self.openState);
     },
   });
 };

@@ -1,21 +1,16 @@
 """Generate the MNDict toolbar icon (pure Python, no dependencies).
 
-Renders at 4x and box-filters down for antialiasing: a purple gradient
-rounded square with a white open book and a small lookup magnifier.
-Output: public/icon.png (88x88, PNG-32).
+MarginNote renders icons as an alpha mask in the UI foreground color, so the
+icon is a pure white silhouette on a transparent background: an open book with
+a lookup magnifier. 64x64 canvas, 4x supersampled geometry.
+Output: public/icon.png (64x64, PNG-32).
 """
 import struct
 import zlib
 
-SIZE = 88
+SIZE = 64
 SCALE = 4
 N = SIZE * SCALE
-
-
-def rounded_rect(px, py, x0, y0, x1, y1, radius):
-    dx = max(x0 + radius - px, 0, px - (x1 - radius))
-    dy = max(y0 + radius - py, 0, py - (y1 - radius))
-    return dx * dx + dy * dy <= radius * radius
 
 
 def in_polygon(px, py, points):
@@ -38,52 +33,35 @@ def dist_segment(px, py, ax, ay, bx, by):
 
 
 def render():
-    bg = (0, 0, 0, 0)
-    white = (255, 255, 255, 255)
-    # 4x RGB accumulation with straight alpha
-    buf = [[list(bg) for _ in range(N)] for _ in range(N)]
-    margin = 3 * SCALE
-    radius = 20 * SCALE
-    spine_x = N / 2
+    def S(v):
+        return v * SCALE
+
+    left_page = [(S(14), S(18)), (S(30), S(23)), (S(30), S(41)), (S(14), S(36))]
+    right_page = [(S(50), S(18)), (S(34), S(23)), (S(34), S(41)), (S(50), S(36))]
+    cx, cy, radius, stroke = S(44), S(47), S(7), S(3.5)
+    handle = ((cx + radius * 0.72, cy + radius * 0.72), (cx + radius * 1.3, cy + radius * 1.3))
+
+    # grayscale coverage, box-downsampled to straight alpha RGBA
+    coverage = bytearray(N * N)
     for y in range(N):
-        mix = y / N
-        top, bottom = (139, 92, 246), (109, 55, 180)  # violet -> deep purple
-        tint = tuple(round(top[i] + (bottom[i] - top[i]) * mix) for i in range(3)) + (255,)
         for x in range(N):
             px, py = x + 0.5, y + 0.5
-            on = False
-            if rounded_rect(px, py, margin, margin, N - margin, N - margin, radius):
-                on = True
-                buf[y][x] = list(tint)
-            # open book: two pages leaning toward the spine
-            left_page = [(22 * SCALE, 26 * SCALE), (spine_x - 2 * SCALE, 32 * SCALE),
-                         (spine_x - 2 * SCALE, 58 * SCALE), (22 * SCALE, 52 * SCALE)]
-            right_page = [(N - 22 * SCALE, 26 * SCALE), (spine_x + 2 * SCALE, 32 * SCALE),
-                          (spine_x + 2 * SCALE, 58 * SCALE), (N - 22 * SCALE, 52 * SCALE)]
-            if on and (in_polygon(px, py, left_page) or in_polygon(px, py, right_page)):
-                buf[y][x] = list(white)
-            # lookup magnifier at bottom-right, overlapping the book
-            cx, cy, r, stroke = 58 * SCALE, 58 * SCALE, 10 * SCALE, 3.2 * SCALE
-            ring = abs(((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 - r) <= stroke / 2
-            handle = dist_segment(px, py, cx + r * 0.72, cy + r * 0.72,
-                                  cx + r * 1.65, cy + r * 1.65) <= stroke / 2
-            if on and (ring or handle):
-                buf[y][x] = list(white)
-    # box downsample
+            on = (in_polygon(px, py, left_page) or in_polygon(px, py, right_page)
+                  or abs(((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 - radius) <= stroke / 2
+                  or dist_segment(px, py, *handle[0], *handle[1]) <= stroke / 2)
+            coverage[y * N + x] = 255 if on else 0
+
     out = bytearray()
     inv = 1 / (SCALE * SCALE)
     for oy in range(SIZE):
         out.append(0)  # PNG filter type 0
         for ox in range(SIZE):
-            r = g = b = a = 0
+            total = 0
             for sy in range(oy * SCALE, (oy + 1) * SCALE):
+                row = sy * N
                 for sx in range(ox * SCALE, (ox + 1) * SCALE):
-                    pr, pg, pb, pa = buf[sy][sx]
-                    r += pr * pa; g += pg * pa; b += pb * pa; a += pa
-            if a:
-                out += bytes((round(r / a), round(g / a), round(b / a), round(a * inv)))
-            else:
-                out += b"\x00\x00\x00\x00"
+                    total += coverage[row + sx]
+            out += bytes((255, 255, 255, round(total * inv)))
     return bytes(out)
 
 
