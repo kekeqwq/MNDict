@@ -1,5 +1,3 @@
-JSB.require("NativeDb");
-
 var MNDICT_AUTO_KEY = "io.github.kekeqwq.mndict.lookupSelection";
 var MNDICT_AUTO_PLAY_KEY = "io.github.kekeqwq.mndict.lookupAutoPlay";
 

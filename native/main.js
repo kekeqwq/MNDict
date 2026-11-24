@@ -1,4 +1,5 @@
 JSB.require("PanelBridge");
+JSB.require("NativeDb");
 var SELECTION = "PopupMenuOnSelection";
 
 // JSB 实例方法按 selector 映射，带参方法不在 self 上；业务逻辑放文件级函数，显式传上下文。
