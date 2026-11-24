@@ -33,6 +33,7 @@ const NATIVE_GLOBALS = [
   "NSFileManager",
   "NSFileHandle",
   "NSData",
+  "SpeechManager",
   "mndictAutoLookup",
   "mndictPanelMessage",
   "console",

@@ -130,10 +130,25 @@ function mndictArchiveRead(id, offset, length) {
   return { ok: true, data: chunk ? chunk.base64Encoding() : "" };
 }
 
+function mndictSpeak(name) {
+  var rest = name.substring("speak:".length);
+  var cut = rest.indexOf(":");
+  var lang = cut >= 0 ? rest.substring(0, cut) : "en-US";
+  var text = cut >= 0 ? rest.substring(cut + 1) : rest;
+  if (!text || text.length > 200) return { ok: false };
+  var manager = SpeechManager.sharedInstance();
+  if (!manager) return { ok: false };
+  manager.stopSpeech();
+  manager.languageCode = lang;
+  manager.playText(text);
+  return { ok: true };
+}
+
 function mndictPanelMessage(name, payload, openState) {
   if (name === "getOpenState") return openState;
   var parts = String(name).split(":");
   var command = parts[0];
+  if (command === "speak") return mndictSpeak(String(name));
   if (command === "getSettings") {
     return { ok: true, autoLookup: mndictAutoLookup(), autoPlay: mndictAutoPlay() };
   }
