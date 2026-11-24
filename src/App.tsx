@@ -6,7 +6,7 @@ const host = typeof mn === "undefined" ? undefined : mn;
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const settingsEvent = "mn:mndict-open";
 
-interface SettingsResponse { ok: boolean; autoLookup?: boolean }
+interface SettingsResponse { ok: boolean; autoLookup?: boolean; got?: string }
 
 function Results({ state }: { state: { query: string; matches: Match[]; error?: string } | null }) {
   if (!state) return null;
@@ -34,6 +34,7 @@ export function App() {
   const [storageError, setStorageError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const lookupVersion = useRef(0);
+  const logRef = useRef<HTMLDivElement>(null);
 
   async function search(text: string) {
     const normalized = text.trim();
@@ -78,6 +79,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log]);
+
+  useEffect(() => {
     if (!host) return;
     host.size(mode === "workspace" ? 420 : 355, mode === "workspace" ? 520 : 240);
   }, [mode]);
@@ -107,7 +112,9 @@ export function App() {
     if (!host) return;
     await update(async () => {
       const response = await host.call<SettingsResponse>("setAutoLookup", enabled);
-      if (!response?.ok || response.autoLookup !== enabled) throw new Error("无法保存划词设置");
+      if (!response?.ok || response.autoLookup !== enabled) {
+        throw new Error(`无法保存划词设置：${JSON.stringify(response)}`);
+      }
       setAutoLookup(enabled);
     });
   }
@@ -145,7 +152,7 @@ export function App() {
           }} /></label>
       </div>
       {progress ? <p role="status">正在索引 {progress.done} / {progress.total} <progress value={progress.done} max={progress.total} /></p> : null}
-      {log.length ? <div className="log" role="log">{log.map((line, index) => <div key={index}>{line}</div>)}</div> : null}
+      {log.length ? <div className="log" role="log" ref={logRef}>{log.map((line, index) => <div key={index}>{line}</div>)}</div> : null}
       {storageError ? <p role="alert">{storageError}</p> : !dictionaries.length && !progress ? <p>还没有导入词典。</p> : null}
       <ul className="library">{dictionaries.map((dict, index) => <li key={dict.id}>
         <label className="dict-name"><input type="checkbox" checked={dict.enabled} disabled={busy}

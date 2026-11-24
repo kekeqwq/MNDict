@@ -93,6 +93,7 @@ JSB.newAddon = function () {
       if (typeof text !== "string") return;
       text = text.trim();
       if (!text || text.length > 120 || /[\r\n]/.test(text)) return;
+      Application.sharedInstance().showHUD("MNDict 查词：" + text, self.window, 1);
       mndictShow(self, "mini", text);
     },
     queryAddonCommandStatus: function () {
