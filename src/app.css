@@ -3,6 +3,8 @@
 :root { font: 15px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ctp-text); background: var(--ctp-base); }
 * { box-sizing: border-box; }
 body { margin: 0; padding: var(--mn-drag-h, 36px) 14px 14px; box-shadow: inset 0 0 0 1px var(--ctp-surface1); }
+/* 原生描边已跟随面板圆角画上时，撤掉矩形兑底环 */
+:root:has(main[data-native-border="true"]) body { box-shadow: none; }
 h1, h2, p, ul { margin: 0; }
 h1 { font-size: 20px; }
 h2 { font-size: 15px; }
