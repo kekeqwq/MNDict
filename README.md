@@ -1,54 +1,37 @@
 # MNDict
 
-MarginNote 5（MN5）的离线词典插件，从 Yomitan 词典生态出发，为阅读 PDF 时的查词而写。非浏览器移植，是按 MN5 场景插件 + 经典 JSB 混合形态（MN Rails 规范）重构的独立工程。
-
-## 功能
-
-- **词典管理（插件设置窗口）**：导入 Yomitan `.zip`（v3：`index.json` + `term_bank_*.json`），列表中可启用/停用、上移/下移调整查询优先级、删除（级联清理词条）。导入全程显示解压/解析/写入日志与进度。
-- **离线查询**：词条、读音、标签、结构化释义（渲染为纯文本，不执行词典 HTML/JS）；英文走词形还原（复数/时态），NFKC 归一化匹配。
-- **持久化**：词典索引存 IndexedDB（`io.github.kekeqwq.mndict.library`）；划词开关存 `NSUserDefaults`。
-- **PDF 划词自动查**：场景内划选文字即弹出释义（不创建摘录、不改文档）。开关在插件设置里，默认关闭。
-- **试查**：设置窗口内置手动查词，导入后可立即验证。
+MNDict 是 MarginNote 5 的离线词典插件，支持在 macOS 和 iPadOS 上划选 PDF 文字查词。词典采用 Yomitan 格式，数据保存在本机。
 
 ## 安装
 
-构建产物在 `release/`：
+到 [GitHub Releases](https://github.com/kekeqwq/MNDict/releases/latest) 下载：
 
-- `MNDict-0.1.0.mntemplate` — 场景模板包（含插件）。场景界面 → 顶部「场景模板」菜单 → 编辑场景模板… → 管理场景模板 → 导入场景模板…
-- `MNDict-0.1.0.mnaddon` — 仅插件包。设置 → 三个点 → 插件 → 导入。
+- **`.mnaddon`**：插件包。通过 MarginNote 的插件管理导入；在 iPad 上也可从「文件」App 分享给 MarginNote。
+- **`.mntemplate`**：可选的场景模板包，已包含插件。通过 MarginNote 的场景模板管理导入，可直接使用底部工具栏的 MNDict 入口。
 
-未认证插件需先在设置里允许。导入模板后，MNDict 按钮出现在底部工具条（胶囊按钮）。
+如遇到未认证插件提示，请先在 MarginNote 设置中允许。安装包不包含词典，打开 **MNDict 设置**后导入 Yomitan v3 `.zip`，再打开「PDF 划词后自动显示释义」。请用有文字层的 PDF；单击未选中的词不会查词。
+
+## 功能
+
+- **划词查词**：左侧卡片显示词条、读音、标签和结构化释义，保留词典排版；支持英文词形还原。
+- **词典管理**：在设置中导入、启用或停用、排序、删除词典；导入过程显示实时日志。
+- **本地存储**：使用原生 SQLite 保存词典索引并保留导入的 ZIP 备份，不需要联网查词。
+- **发音与 Ask AI**：可点按播放发音或开启自动发音；Ask AI 交给 MarginNote 原生对话。在线发音与原生 AI 不属于离线查询。
+- **Catppuccin**：跟随 MarginNote 界面模板，白色和棕褐色用 Latte；灰色、暗黑和绿色用 Macchiato。
 
 ## 开发
 
 ```bash
-npm install
-npm test          # 词典导入/查询/持久化的单元测试（fake-indexeddb + 内存 ZIP）
+npm ci
 npm run check     # ESLint + TypeScript
-npm run build     # 产物进 dist/
-npm run package   # 安装包进 release/
-npm run sync      # 同步到本机 MarginNote 并重启（仅 macOS，会重启 App）
+npm test          # 词典、备份传输与主题映射测试
+npm run build     # 构建到 dist/
+npm run package   # 生成 release/ 下的安装包
+npm run sync      # 部署到本机 MarginNote 并重启（仅 macOS）
 ```
 
-## 结构
-
-```
-native/main.js        # JSB 入口：划词通知 PopupMenuOnSelection、面板生命周期、查询命令
-native/PanelBridge.js # 原生持久化：NSUserDefaults 划词开关
-src/App.tsx           # 设置窗口 + 迷你释义浮层（同一面板两种模式）
-src/dictionary.ts     # IndexedDB 词典库：导入、查询、启停、排序、删除
-src/yomitan.ts        # Yomitan v3 ZIP 解析、词条校验、结构化释义纯文本化
-template/             # 场景模板（底部工具条接入插件入口）
-```
-
-## 状态与计划
-
-- [x] Yomitan v3 词典导入、管理、离线查询
-- [x] IndexedDB 持久化（单测覆盖重开后仍在；App 重启待真机验证）
-- [x] PDF 划词自动查（`PopupMenuOnSelection`，macOS/iPadOS 同一路径）
-- [ ] 单击未选中单词直接查词（需在 MN5 阅读器里验证「点击坐标 → 词」，不行就保持划词）
-- [ ] macOS / iPadOS 双端真机验证：IndexedDB 持久化、文件导入、触控
+安装包作为 GitHub Release 附件分发，不提交到 Git。
 
 ## 致谢
 
-词典格式与词形还原思路来自 [Yomitan](https://github.com/yomidevs/yomitan)（GPL-3.0）；英文词形还原使用 [wink-lemmatizer](https://github.com/winkjs/wink-lemmatizer)（MIT）；ZIP 解析使用 [zip.js](https://gildas-lormeau.github.io/zip.js/)（BSD-3-Clause）。
+词典格式参考 [Yomitan](https://github.com/yomidevs/yomitan)，英文词形还原使用 [wink-lemmatizer](https://github.com/winkjs/wink-lemmatizer)，ZIP 解析使用 [zip.js](https://gildas-lormeau.github.io/zip.js/)，配色来自 [Catppuccin](https://catppuccin.com/palette/)。
