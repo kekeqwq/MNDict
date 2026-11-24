@@ -31,9 +31,8 @@ function Results({ state, css }: { state: QueryResult | null; css: string }) {
     {state.matches.map((match, index) => <article key={index}>
       <header><strong>{match.term}</strong>
         {match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}
-        <AudioButtons match={match} />
       </header>
-      <small>{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}</small>
+      <small className="meta">{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}<AudioButtons match={match} /></small>
       {match.definitions.length ? <Glossary items={match.definitions} /> : <p>这条释义没有可显示的文本。</p>}
     </article>)}
   </section>;
