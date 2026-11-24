@@ -17,10 +17,26 @@ function mndictWatchOutside(ctx) {
   mndictLog("watchOutside controller=" + Boolean(controller) + " doc=" + Boolean(doc) + " view=" + Boolean(view));
   if (!view) return;
   try {
-    var tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, "onOutsideTap:");
-    mndictLog("watchOutside init=" + Boolean(tap));
+    var tap = null;
+    var action = "onOutsideTap:";
+    try {
+      tap = UITapGestureRecognizer.alloc().initWithTargetAction(ctx, action);
+      mndictLog("watchOutside path=alloc.init tap=" + Boolean(tap));
+    } catch (error1) {
+      mndictLog("watchOutside alloc.init 失败=" + error1);
+    }
+    if (!tap) {
+      try {
+        tap = UITapGestureRecognizer.new();
+        mndictLog("watchOutside path=new tap=" + Boolean(tap) + " addTarget=" + Boolean(tap && tap.addTargetAction));
+        if (tap && tap.addTargetAction) tap.addTargetAction(ctx, action);
+        else if (tap && tap.initWithTargetAction) tap.initWithTargetAction(ctx, action);
+      } catch (error2) {
+        mndictLog("watchOutside new 失败=" + error2);
+      }
+    }
+    if (!tap) return;
     tap.cancelsTouchesInView = false;
-    mndictLog("watchOutside cancels=false ok");
     view.addGestureRecognizer(tap);
     ctx.outsideTap = tap;
     ctx.outsideView = view;
