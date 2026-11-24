@@ -112,9 +112,17 @@ function mndictAskAI(ctx) {
     var word = doc && doc.selectionText ? String(doc.selectionText).trim() : "";
     if (!word) return { ok: false, detail: "没有选区" };
     mndictLog("askAI word=" + word.substring(0, 40));
-    Application.sharedInstance().aiWordInContext(null, word, "", function (result) {
-      mndictLog("askAI completion=" + String(result).substring(0, 120));
-    });
+    var candidates = ["embedImmersiveAIChat:", "aiChat:", "onAskAI:"];
+    for (var i = 0; i < candidates.length; i++) {
+      try {
+        controller.performSelectorWithObject(candidates[i], null);
+        var visible = controller.performSelector("isAIChatVisible");
+        mndictLog("askAI try=" + candidates[i] + " visible=" + String(visible));
+        if (String(visible) === "true" || String(visible) === "1") break;
+      } catch (error) {
+        mndictLog("askAI try=" + candidates[i] + " error=" + error);
+      }
+    }
     mndictClose(ctx);
     return { ok: true };
   } catch (error) {
