@@ -59,18 +59,22 @@ function mndictClose(ctx) {
   ctx.panel = null;
   ctx.settingsVisible = false;
   mndictUnwatchOutside(ctx);
-  if (panel) panel.hideFloating();
+  if (panel && panel.floatingVisible) panel.hideFloating();
+  else if (panel) panel.teardown();
 }
 
 // PDF 文字层上下文提取在 native/PageContext.js
-function mndictShow(ctx, mode, text, pageText) {
+function mndictShow(ctx, mode, text, pageText, selectionDoc) {
   var app = Application.sharedInstance();
   var controller = app.studyController(ctx.window);
   if (!controller) {
     app.showHUD("MNDict：拿不到 studyController", ctx.window, 3);
     return;
   }
-  if (ctx.panel && ctx.settingsVisible !== (mode === "workspace")) mndictClose(ctx);
+  if (ctx.panel) mndictClose(ctx);
+  var selectionPage = selectionDoc && selectionDoc.currPageNo;
+  var selectionDocId = selectionDoc && selectionDoc.docMd5;
+  ctx.lookupSettled = false;
   var theme = app.currentTheme;
   ctx.openState = { mode: mode, text: text, theme: theme == null ? null : String(theme), pageText: pageText || "" };
   mndictLog("show mode=" + mode + " theme=" + ctx.openState.theme + " 上下文=" + ctx.openState.pageText.length + " 字");
@@ -91,6 +95,26 @@ function mndictShow(ctx, mode, text, pageText) {
         }
         return { ok: true };
       }
+      if (ctx.panel !== panel) return { ok: false };
+      if (mode === "mini" && name === "getOpenState") mndictLog("lookup bridge ready");
+      if (name === "lookupHit" || name === "lookupMiss") {
+        if (mode !== "mini" || ctx.lookupSettled) return { ok: false };
+        ctx.lookupSettled = true;
+        mndictLog("lookup result=" + name);
+        var doc = controller.readerController && controller.readerController.currentDocumentController;
+        if (!doc || doc.docMd5 !== selectionDocId || doc.currPageNo !== selectionPage || String(doc.selectionText || "").trim() !== text) {
+          mndictLog("lookup canceled: selection changed");
+          mndictClose(ctx);
+          return { ok: false };
+        }
+        if (name === "lookupMiss") {
+          if (!mndictAskAI(ctx).ok) {
+            mndictClose(ctx);
+            app.showHUD("MNDict：未找到释义，无法打开 Ask AI", ctx.window, 3);
+          }
+        } else if (panel.view) panel.view.alpha = 1;
+        return { ok: true };
+      }
       if (name === "askAI") return mndictAskAI(ctx);
       return mndictPanelMessage(name, payload, ctx.openState);
     };
@@ -102,27 +126,29 @@ function mndictShow(ctx, mode, text, pageText) {
     ctx.panel = panel;
   }
   ctx.settingsVisible = mode === "workspace";
-  if (mode === "mini") mndictWatchOutside(ctx);
-  else mndictUnwatchOutside(ctx);
-  ctx.panel.showFloatingIn(controller);
-  // 查词卡固定在屏幕下部左侧：黑色工具条所在的中带之下，内容随 fit 向下生长
   if (mode === "mini") {
-    try {
-      var bounds = controller.view.bounds;
-      var panelView = ctx.panel.view;
-      if (panelView && bounds) {
-        // 左列整块：顶部栏下方到底部工具栏上方，横向约 42% 宽
-        var y = Math.round(bounds.height * 0.16);
-        var h = Math.round(bounds.height * 0.69);
-        panelView.frame = { x: Math.round(bounds.width * 0.02), y: y, width: Math.round(bounds.width * 0.52), height: h };
-        ctx.panel.maxContentHeight = h;
-        mndictLog("show mini 定位 左列 w=" + Math.round(bounds.width * 0.52) + " h=" + h);
-      }
-    } catch (frameError) {
-      mndictLog("show frame error=" + frameError);
-    }
-  }
+    mndictMountLookup(ctx.panel, controller);
+    mndictWatchOutside(ctx);
+  } else ctx.panel.showFloatingIn(controller);
   ctx.panel.post("mndict-open", ctx.openState);
+}
+
+function mndictMountLookup(panel, controller) {
+  // Mount the WebView to start the page bridge. Alpha zero also disables hit testing.
+  if (panel.view) panel.view.alpha = 0;
+  panel.showFloatingIn(controller);
+  try {
+    var view = panel.view;
+    if (!view) return;
+    view.alpha = 0;
+    var bounds = controller.view.bounds;
+    if (!bounds) return;
+    var h = Math.round(bounds.height * 0.69);
+    view.frame = { x: Math.round(bounds.width * 0.02), y: Math.round(bounds.height * 0.16), width: Math.round(bounds.width * 0.52), height: h };
+    panel.maxContentHeight = h;
+  } catch (error) {
+    mndictLog("show frame error=" + error);
+  }
 }
 
 // 在聊天视图树里按标题找按钮（用于自动点掉「点击即发送」）
@@ -272,7 +298,7 @@ JSB.newAddon = function () {
       if (typeof text !== "string") return;
       text = text.trim();
       if (!text || text.length > 120 || /[\r\n]/.test(text)) return;
-      mndictShow(self, "mini", text, mndictPageContext(self, doc, text));
+      mndictShow(self, "mini", text, mndictPageContext(self, doc, text), doc);
     },
     queryAddonCommandStatus: function () {
       return {

@@ -1,4 +1,5 @@
 import type { Match } from "../src/dictionary";
+import { lookupSelection } from "../src/selectionLookup";
 import { findPhrases, phraseCandidates } from "../src/phrases";
 
 function ok(condition: unknown, message: string): asserts condition {
@@ -47,4 +48,17 @@ const top = hits[0];
 ok(hits.length === 1 && top?.phrase === "it was", "只保留词典命中的词组");
 ok(top?.matches.length === 1, "带上词组释义");
 
-console.log("词组识别测试通过");
+const phraseOnly = await lookupSelection(mock, "was", sentence);
+ok(!phraseOnly.miss && phraseOnly.matches.length === 0 && phraseOnly.phrases.length === 1, "短语命中时不触发 AI");
+const wordOnly = await lookupSelection(mock, "it was", "");
+ok(!wordOnly.miss && wordOnly.matches.length === 1, "选区直查命中时不触发 AI");
+const empty = await lookupSelection(mock, "unknown", sentence);
+ok(empty.miss, "单词和短语都没有命中时触发 AI");
+const readError = new Error("词典读取失败");
+const failure = await lookupSelection({ async search(text) {
+  if (text === "was") return [];
+  throw readError;
+} }, "was", sentence).catch((error: unknown) => error);
+ok(failure === readError, "短语查询错误不是未命中");
+
+console.log("词组识别与 AI 回退测试通过");

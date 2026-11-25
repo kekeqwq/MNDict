@@ -78,12 +78,7 @@ export function phraseCandidates(selection: string, pageText: string, max = 28):
 export async function findPhrases(source: PhraseSource, selection: string, pageText: string, limit = 3): Promise<PhraseLookup[]> {
   const hits: PhraseLookup[] = [];
   for (const phrase of phraseCandidates(selection, pageText)) {
-    let matches: Match[];
-    try {
-      matches = await source.search(phrase);
-    } catch {
-      continue;
-    }
+    const matches = await source.search(phrase);
     if (matches.length) hits.push({ phrase, matches });
     if (hits.length >= limit) break;
   }

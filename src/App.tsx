@@ -3,7 +3,8 @@ import { isJapanese, playAudio } from "./audio";
 import { dropArchive, listArchives, loadArchive, saveArchive } from "./archive";
 import { createDictionaryStore, PARSER_VERSION, type Dictionary, type Match } from "./dictionary";
 import { Glossary } from "./glossary";
-import { findPhrases, type PhraseLookup } from "./phrases";
+import type { PhraseLookup } from "./phrases";
+import { lookupSelection } from "./selectionLookup";
 import { resolvePalette } from "./theme";
 import { scopeDictionaryCss } from "./yomitan";
 
@@ -83,7 +84,6 @@ export function App() {
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [autoLookup, setAutoLookup] = useState<boolean | null>(null);
   const [autoPlay, setAutoPlay] = useState<boolean | null>(null);
-  const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [phrases, setPhrases] = useState<PhraseLookup[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,50 +93,41 @@ export function App() {
   const [storageError, setStorageError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingClear, setPendingClear] = useState<"cache" | "all" | null>(null);
-  const lookupVersion = useRef(0);
-  const phraseVersion = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const dictCss = useMemo(() => dictionaries.filter((dict) => dict.enabled && dict.css)
     .map((dict) => scopeDictionaryCss(dict.css ?? "")).join("\n"), [dictionaries]);
 
-  async function search(text: string) {
-    const normalized = text.trim();
-    const version = ++lookupVersion.current;
-    setResult(null);
-    if (!normalized) return;
-    try {
-      const matches = await library.search(normalized);
-      if (version === lookupVersion.current) setResult({ query: normalized, matches });
-    } catch (error) {
-      if (version === lookupVersion.current) setResult({ query: normalized, matches: [], error: errorText(error) });
-    }
-  }
-
-  // 词组识别：从 PDF 文字层上下文找词典命中的多词组（Kiki 行为对齐）
-  async function searchPhrases(text: string, pageText: string) {
-    const version = ++phraseVersion.current;
-    setPhrases(null);
-    if (!pageText.trim()) return;
-    try {
-      const hits = await findPhrases(library, text, pageText);
-      if (version === phraseVersion.current) setPhrases(hits);
-    } catch {
-      // 词组识别失败不影响单词查询
-    }
-  }
-
   useEffect(() => {
     let active = true;
+    let opened = false;
+    let maintenance: Promise<void> | undefined;
+    async function lookup(text: string, pageText: string) {
+      let miss = false;
+      try {
+        await maintenance;
+        if (!active) return;
+        const outcome = await lookupSelection(library, text, pageText);
+        if (!active) return;
+        miss = outcome.miss;
+        if (!miss) {
+          setPhrases(outcome.phrases);
+          setResult({ query: text, matches: outcome.matches });
+        }
+      } catch (error) {
+        if (!active) return;
+        setResult({ query: text, matches: [], error: errorText(error) });
+      }
+      await host?.call(miss ? "lookupMiss" : "lookupHit");
+    }
     function applyOpen(data: unknown) {
       const open = data as { mode?: unknown; text?: unknown; theme?: unknown; pageText?: unknown } | null;
-      if (open?.mode !== "mini" && open?.mode !== "workspace") return;
+      if (opened || (open?.mode !== "mini" && open?.mode !== "workspace")) return;
+      opened = true;
       setPalette(resolvePalette(open.theme, host?.theme));
       setMode(open.mode);
       if (open.mode === "workspace") host?.size(480, 640); // 迷你查词卡尺寸由原生固定定位决定，不覆盖
       if (open.mode === "mini" && typeof open.text === "string") {
-        setQuery(open.text);
-        void search(open.text);
-        void searchPhrases(open.text, typeof open.pageText === "string" ? open.pageText : "");
+        void lookup(open.text, typeof open.pageText === "string" ? open.pageText : "").catch(() => {});
       }
     }
     function onOpen(event: Event) {
@@ -152,7 +143,7 @@ export function App() {
         if (typeof response.autoPlay === "boolean") setAutoPlay(response.autoPlay);
       }).catch(() => {});
       host.call<unknown>("getOpenState").then((state) => { if (active) applyOpen(state); }).catch(() => {});
-      void update(async () => {
+      maintenance = update(async () => {
         if (!host || !__MN_NATIVE_BRIDGE__) return;
         for (const dict of await library.list()) {
           if (dict.parser === PARSER_VERSION || !dict.archiveId) continue;
@@ -190,7 +181,6 @@ export function App() {
       active = false;
       removeEventListener(settingsEvent, onOpen);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时执行一次
   }, []);
 
   useEffect(() => {
@@ -244,7 +234,6 @@ export function App() {
     try {
       await action();
       setDictionaries(await library.list());
-      if (result) await search(query);
     } catch (error) {
       setMessage(errorText(error));
     } finally {
