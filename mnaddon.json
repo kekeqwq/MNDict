@@ -2,7 +2,7 @@
   "addonid": "io.github.kekeqwq.mndict",
   "author": "keke",
   "title": "MNDict",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "marginnote_version_min": "5.0.0",
   "immersiveOnly": true,
   "panel": "index.html",

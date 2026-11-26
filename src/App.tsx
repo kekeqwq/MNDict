@@ -41,7 +41,10 @@ function EntryList({ matches }: { matches: Match[] }) {
     <header><strong>{match.term}</strong>
       {match.reading && match.reading !== match.term ? <span>{match.reading}</span> : null}
     </header>
-    <small className="meta">{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}<AudioButtons match={match} /></small>
+    <div className="meta">
+      <small>{match.dictionary}{match.tags ? ` · ${match.tags}` : ""}</small>
+      <AudioButtons match={match} />
+    </div>
     {match.definitions.length ? <Glossary items={match.definitions} /> : <p>这条释义没有可显示的文本。</p>}
   </article>)}</>;
 }

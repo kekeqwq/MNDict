@@ -1,6 +1,7 @@
 JSB.require("PanelBridge");
 JSB.require("NativeDb");
 JSB.require("PageContext");
+JSB.require("LookupLayout");
 var SELECTION = "PopupMenuOnSelection";
 
 // JSB 实例方法按 selector 映射，带参方法不在 self 上；业务逻辑放文件级函数，显式传上下文。
@@ -137,18 +138,8 @@ function mndictMountLookup(panel, controller) {
   // Mount the WebView to start the page bridge. Alpha zero also disables hit testing.
   if (panel.view) panel.view.alpha = 0;
   panel.showFloatingIn(controller);
-  try {
-    var view = panel.view;
-    if (!view) return;
-    view.alpha = 0;
-    var bounds = controller.view.bounds;
-    if (!bounds) return;
-    var h = Math.round(bounds.height * 0.69);
-    view.frame = { x: Math.round(bounds.width * 0.02), y: Math.round(bounds.height * 0.16), width: Math.round(bounds.width * 0.52), height: h };
-    panel.maxContentHeight = h;
-  } catch (error) {
-    mndictLog("show frame error=" + error);
-  }
+  if (panel.view) panel.view.alpha = 0;
+  mndictLayoutLookup(panel, controller);
 }
 
 // 在聊天视图树里按标题找按钮（用于自动点掉「点击即发送」）
@@ -286,6 +277,10 @@ JSB.newAddon = function () {
     },
     notebookWillClose: function () {
       mndictClose(self);
+    },
+    controllerWillLayoutSubviews: function (controller) {
+      if (!self.panel || self.settingsVisible || !self.panel.floatingVisible) return;
+      if (controller === Application.sharedInstance().studyController(self.window)) mndictLayoutLookup(self.panel, controller);
     },
     onOutsideTap: function () {
       if (self.panel && !self.settingsVisible) mndictClose(self);
